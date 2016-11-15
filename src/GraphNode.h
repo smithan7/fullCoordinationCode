@@ -25,15 +25,15 @@ using namespace std;
 
 class GraphNode {
 public:
-	GraphNode();
+	GraphNode(Point l);
 	virtual ~GraphNode();
 
-	int location[2];
+	Point loc;
 	float reward;
-	float cost;
 	Mat observation;
-	vector<GraphNode> nbrs;
+	vector<int> nbrs;
 	vector<float> transitions;
+	bool updateView;
 
 };
 

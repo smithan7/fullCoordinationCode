@@ -30,6 +30,7 @@ class GraphCoordination {
 public:
 	GraphCoordination();
 	virtual ~GraphCoordination();
+	void init(float obsRadius, float comRadius);
 
 	// for finding the optimal poses
 	Graph thinGraph, poseGraph, travelGraph, tempGraph;
@@ -64,7 +65,8 @@ public:
 	int nPullsTSP;
 	int nPullsEvolvePoseGraph;
 	int minObsForPose;
-	vector<Point> viewPerim;
+	vector<Point> viewPerim, comPerim;
+	void simulateCommunication(Point pose, Mat &resultingView, Costmap &costmap);
 
 	vector<vector<int> > tspPoseTours; // [agent, pose along tour]
 	vector<vector<Point > > tspPoseToursLocations;

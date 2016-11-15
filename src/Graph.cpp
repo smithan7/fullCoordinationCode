@@ -22,7 +22,7 @@ using namespace cv;
 using namespace std;
 
 Graph::Graph(){
-	nodeSpacing = 3;
+	nodeSpacing = 100;
 	nbrSpacing = nodeSpacing;
 }
 
@@ -394,10 +394,11 @@ void Graph::createThinGraph(Costmap &costmap, int nodeSpacing, int nbrSpacing){
 	// 102 = inferred obstacle
 	// 201 unknown
 
+
 	// get Mat of all observed or inferred free cells to make travel graph
 	Mat freeMat = Mat::zeros(costmap.cells.size(), CV_8UC1);
-	for(size_t i = 0; i<costmap.cells.cols; i++){
-		for(size_t j =0; j<costmap.cells.rows; j++){
+	for(int i = 0; i<costmap.cells.cols; i++){
+		for(int j =0; j<costmap.cells.rows; j++){
 			Point a(i,j);
 			if(costmap.cells.at<short>(a) <= costmap.domFree){ // observed free space or inferred free space - to make travel graph
 				freeMat.at<uchar>(a) = 255;
@@ -405,27 +406,94 @@ void Graph::createThinGraph(Costmap &costmap, int nodeSpacing, int nbrSpacing){
 		}
 	}
 
-	threshold(freeMat,freeMat,10,255,CV_THRESH_BINARY);
+	if( false ){
 
-	// get the thin free mat
-	Mat thinMat = Mat::zeros(freeMat.size(), CV_8UC1); // TODO bitwise or with prev thinMat and currently observed cells
-	thinning(freeMat, thinMat);
+		if(thinMat.empty()){
+			thinMat = Mat::zeros(costmap.cells.size(), CV_8UC1);
+			priorMat = Mat::zeros(costmap.cells.size(), CV_8UC1);
+		}
+		bitwise_not(priorMat, priorMat);
+		Mat newFree = Mat::zeros(costmap.cells.size(), CV_8UC1);
 
-	/*
-	namedWindow("Graph::createThinGraph::thinMat", WINDOW_NORMAL);
-	imshow("Graph::createThinGraph::thinMat", thinMat);
-	waitKey(0);
-	*/
+		bitwise_and(priorMat, freeMat, newFree);
+		priorMat = freeMat.clone();
+
+		costmap.growMatIntoFreeCells( newFree );
+		pruneThinMat( costmap );
+
+		bitwise_or(thinMat, newFree, newFree);
+
+		threshold(newFree, newFree,10,255,CV_THRESH_BINARY);
+
+		// get the thin free mat
+		thinning(newFree, thinMat);
+	}
+	else if(false){
+		Mat newFree = Mat::zeros(freeMat.rows/2, freeMat.cols/2, CV_8UC1);
+		downSample(freeMat, newFree, costmap);
+
+		threshold(newFree, newFree,10,255,CV_THRESH_BINARY);
+
+		//get the thin free mat
+		Mat tMat = Mat::zeros( newFree.size(), CV_8UC1);
+		thinning(newFree, tMat);
+
+		resize(tMat, thinMat, thinMat.size(), 2, 2, INTER_AREA);
+	}
+	else{
+		threshold(freeMat, freeMat,10,255,CV_THRESH_BINARY);
+		thinning(freeMat, thinMat);
+	}
+
+	Mat tMat = thinMat.clone();
 
 	// add nodes
 	nodeLocations.clear();
-	findStatesCityBlockDistance(thinMat); // add them to graf;
+	findStatesCityBlockDistance(tMat); // add them to graf;
 	//findStateTransitionsCityBlockDistance(costmap); // find connections in graf; // TODO add line checking to this for intersections and increase distance
 	//findStatesByGrid(freeMat);
 	//findStateTransitionsByVisibility(costmap);
 	//findCNodeTransitions(costmap);
 	//mergeStatesBySharedNbr(); // TODO make this work, currently runs forever
 
+}
+
+void Graph::downSample( Mat &oMat, Mat &nMat, Costmap &costmap){
+
+	int dx[4] = {0,1,0,1};
+	int dy[4] = {0,0,1,1};
+
+	for(int i=0; i<costmap.cells.cols/2-2; i++){
+		for(int j=0; j<costmap.cells.rows/2-2; j++){
+			Point n(i,j);
+			bool flag = true;
+			for(int k=0; k<4; k++){
+				Point p(2*i+dx[k], 2*j+dy[k]);
+
+				if(costmap.cells.at<short>(p) >= costmap.unknown){
+					flag = false;
+				}
+			}
+			if(flag){
+				nMat.at<uchar>(n) = 255;
+			}
+			else{
+				nMat.at<uchar>(n) = 0;
+			}
+		}
+	}
+}
+
+void Graph::pruneThinMat( Costmap &costmap ){
+
+	for(int i=0; i<costmap.cells.cols; i++){
+		for(int j=0; j<costmap.cells.rows; j++){
+			Point p(i,j);
+			if(thinMat.at<uchar>(p) == 255 && costmap.cells.at<short>(p) >= costmap.unknown){
+				thinMat.at<uchar>(p) = 0;
+			}
+		}
+	}
 }
 
 void Graph::thinning(const Mat& src, Mat& dst){

@@ -19,6 +19,7 @@
 #include "World.h"
 #include "Frontier.h"
 #include "Graph.h"
+#include "Pose.h"
 
 using namespace std;
 using namespace cv;
@@ -38,7 +39,21 @@ public:
 	void makeGeometricInference(Costmap &costmap);
 	void makeNaiveInference( Costmap &costmap);
 	void makeStructuralInference(Costmap &costmap);
-	void makeVisualInference(Costmap &costmap);
+	void makeVisualInference(Costmap &costmap, Graph &graph);
+
+
+	// visual inference
+	void visualInferenceOnFreeSpace( Costmap &costmap, Graph &graph, Mat &visInfMat );
+	void visualInferenceOnObstacleContours( Costmap &costmap, Mat &visInfMat );
+	// calc the matching of two histograms, full rotation
+	float calcVisualFit(Pose &po, Pose &pl, Costmap &costmap, int &iter);
+	// calculate the reward of two aligned scans
+	float visualReward(Costmap &costmap, float dist, Point &obsPt, Point &libPt);
+	void addToVisualLibrary(Pose &pose);
+	Pose getVisualPose(Point p, Costmap &costmap);
+	void testPoseAgainstLibrary(Pose &oPose);
+	vector<Pose> visualLibrary;
+
 
 	// wall inflation
 	int wallInflationDistance;

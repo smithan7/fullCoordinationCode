@@ -26,6 +26,8 @@ public:
 	Costmap();
 	virtual ~Costmap();
 
+	void shareCostmap(Costmap &b);
+
 	void prettyPrintCostmap();
 
 	// useful stuff
@@ -44,6 +46,11 @@ public:
 
 	vector<Point> cellUpdates;
 	vector<Point> hullBreaches;
+	vector<Point> cellChanges;
+
+	void simulateObservation(Point pose, Mat &resultingView, vector<Point> observedCells, float obsRadius);
+	vector<Point> viewPerim;
+	void growMatIntoFreeCells( Mat &freeMat );
 
 	void getRewardMat(float w[3], float e[2], float spread);
 	void displayThermalMat(Mat &mat);
@@ -54,12 +61,15 @@ public:
 	float getEuclidianDistance(Point a, Point b);
 	void getDistGraph();
 
-	float cumulativeAStarDist(Point sLoc, Point gLoc, Mat &cSet, vector<Point> &oSet, Mat &fScore, Mat &gScore);
+	float cumulativeAStarDist(Point sLoc, Point gLoc, Mat &cSet, Mat &oSet, vector<Point> &oVec, Mat &fScore, Mat &gScore);
 	float aStarDist(Point sLoc, Point gLoc);
 	vector<Point> aStarPath(Point sLoc, Point gLoc);
 
 	// TODO only update portion that needs it
 	//void updateCostmap(vector<vector<int> > cells, vector<int> value);
+
+	//CumulativePathPlanner observerPathPlanner;
+	//CumulativePathPlanner relayPathPlanner;
 
 	Mat displayPlot;
 	void buildCellsPlot(); // build nice display plot

@@ -7,11 +7,12 @@
 
 #include "GraphNode.h"
 
-GraphNode::GraphNode() {
-
-
-
+GraphNode::GraphNode(Point l) {
+	loc = l;
+	updateView = true;
 }
 
-GraphNode::~GraphNode() {}
+
+
+GraphNode::~GraphNode(){}
 

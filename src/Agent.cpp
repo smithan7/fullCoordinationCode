@@ -9,15 +9,16 @@ using namespace std;
 
 #include "Agent.h"
 
-Agent::Agent(Point sLoc, int myIndex, World &gMap, float obsThresh, float comThresh, int numAgents){
+Agent::Agent(Point sLoc, int myIndex, float batteryInit, float obsThresh, float comThresh, int numAgents, int reportInterval){
 	this->obsThresh = obsThresh;
 	this->comThresh = comThresh;
-	//this->myMap.createGraph(gMap, obsThresh, comThresh, gMap.gSpace);
 
 	cLoc= sLoc;
 	gLoc = sLoc;
+	oLoc = sLoc;
 
 	gNode = -1;
+	cNode = 0;
 
 	this->myIndex = myIndex;
 	this->pickMyColor();
@@ -25,8 +26,606 @@ Agent::Agent(Point sLoc, int myIndex, World &gMap, float obsThresh, float comThr
 	for(int i=0; i<numAgents; i++){
 		agentLocs.push_back(sLoc);
 	}
-
 	market.init(numAgents, myIndex );
+	graphCoordination.init(obsThresh, comThresh);
+
+	reportFlag = false;
+	this->reportInterval = reportInterval;
+	reportCntr = 0;
+
+	returnFlag = false;
+	this->batteryLeft = batteryInit;
+	returnTime = -1;
+
+	relayFlag = false;
+	sacrificeFlag = false;
+}
+
+Point Agent::reportToOperator(){
+
+	// simulate communication of operator, find node on graph that is closest to agent that is in coms of operator, return it
+	Mat tComs = Mat::zeros(costmap.cells.size(), CV_8UC1);
+	graphCoordination.simulateCommunication( oLoc, tComs, costmap);
+
+	vector<Point> comPts;
+	for(size_t i=0; i<graphCoordination.thinGraph.nodeLocations.size(); i++){
+		if( tComs.at<uchar>(graphCoordination.thinGraph.nodeLocations[i]) == 255 ){
+			comPts.push_back( graphCoordination.thinGraph.nodeLocations[i] );
+		}
+	}
+
+	vector<float> comDists;
+	vector<bool> trueDists;
+	float minDist = INFINITY;
+	int mindex = -1;
+	for(size_t i=0; i<comPts.size(); i++){
+
+		comDists.push_back( sqrt(pow(cLoc.x-comPts[i].x,2) + pow(cLoc.y-comPts[i].y,2) ));
+		trueDists.push_back( false );
+
+		if(comDists.back() < minDist){
+			minDist = comDists.back();
+			mindex = i;
+		}
+	}
+
+	if(mindex >= 0){
+		while( true ){ // find closest
+			if( trueDists[mindex]){
+				return comPts[mindex];
+			}
+			comDists[mindex] = costmap.aStarDist(cLoc, comPts[mindex]);
+			trueDists[mindex] = true;
+
+			minDist = INFINITY;
+			mindex= -1;
+			for(size_t i=0; i<comDists.size(); i++){
+				if(comDists[i] < minDist){
+					minDist = comDists[i];
+					mindex = i;
+				}
+			}
+		}
+	}
+
+	return oLoc;
+}
+
+Point Agent::returnToOperator(){
+	return oLoc;
+}
+
+float Agent::getDistanceToReturnToOperator(){
+	return costmap.aStarDist(cLoc, oLoc);
+}
+
+float Agent::getDistanceToReportToOperator(){
+
+	// simulate communication of operator, find node on graph that is closest to agent that is in coms of operator, return it
+	Mat tComs = Mat::zeros(costmap.cells.size(), CV_8UC1);
+	graphCoordination.simulateCommunication( oLoc, tComs, costmap);
+
+	vector<Point> comPts;
+	for(size_t i=0; i<graphCoordination.thinGraph.nodeLocations.size(); i++){
+		if( tComs.at<uchar>(graphCoordination.thinGraph.nodeLocations[i]) == 255 ){
+			comPts.push_back( graphCoordination.thinGraph.nodeLocations[i] );
+			//circle(tComs, graphCoordination.thinGraph.nodeLocations[i], 2, Scalar(127), -1, 8);
+		}
+	}
+
+	//circle(tComs, cLoc, 3, Scalar(0), -1, 8);
+	//circle(tComs, cLoc, 1, Scalar(255), -1, 8);
+
+	//namedWindow("tComs", WINDOW_NORMAL);
+	//imshow("tComs", tComs);
+	//waitKey(0);
+
+	vector<float> comDists;
+	vector<bool> trueDists;
+	float minDist = INFINITY;
+	int mindex = -1;
+	for(size_t i=0; i<comPts.size(); i++){
+
+		comDists.push_back( sqrt(pow(cLoc.x-comPts[i].x,2) + pow(cLoc.y-comPts[i].y,2) ));
+		trueDists.push_back( false );
+
+		if(comDists.back() < minDist){
+			minDist = comDists.back();
+			mindex = i;
+		}
+	}
+
+
+	if(mindex >= 0){
+		while( true ){ // find closest
+			//circle(tComs, comPts[mindex], 2, Scalar(127), -1, 8);
+			//circle(tComs, comPts[mindex], 1, Scalar(0), -1, 8);
+			//cout << "comDist[mindex] = " << comDists[mindex] << endl;
+
+			//namedWindow("tComs", WINDOW_NORMAL);
+			//imshow("tComs", tComs);
+			//waitKey(0);
+
+			if( trueDists[mindex]){
+				return comDists[mindex];
+			}
+			comDists[mindex] = costmap.aStarDist(cLoc, comPts[mindex]);
+			trueDists[mindex] = true;
+
+			minDist = INFINITY;
+			mindex= -1;
+			for(size_t i=0; i<comDists.size(); i++){
+				if(comDists[i] < minDist){
+					minDist = comDists[i];
+					mindex = i;
+				}
+			}
+		}
+	}
+
+	return costmap.aStarDist(cLoc, oLoc);
+}
+
+float Agent::getDistanceToReportToRelayPt(){
+	// simulate communication of operator, find node on graph that is closest to agent that is in coms of operator, return it
+	Mat tComs = Mat::zeros(costmap.cells.size(), CV_8UC1);
+	graphCoordination.simulateCommunication( rLoc, tComs, costmap);
+
+	vector<Point> comPts;
+	for(size_t i=0; i<graphCoordination.thinGraph.nodeLocations.size(); i++){
+		if( tComs.at<uchar>(graphCoordination.thinGraph.nodeLocations[i]) == 255 ){
+			comPts.push_back( graphCoordination.thinGraph.nodeLocations[i] );
+			//circle(tComs, graphCoordination.thinGraph.nodeLocations[i], 2, Scalar(127), -1, 8);
+		}
+	}
+
+	//circle(tComs, cLoc, 3, Scalar(0), -1, 8);
+	//circle(tComs, cLoc, 1, Scalar(255), -1, 8);
+
+	//namedWindow("tComs", WINDOW_NORMAL);
+	//imshow("tComs", tComs);
+	//waitKey(0);
+
+	vector<float> comDists;
+	vector<bool> trueDists;
+	float minDist = INFINITY;
+	int mindex = -1;
+	for(size_t i=0; i<comPts.size(); i++){
+
+		comDists.push_back( sqrt(pow(cLoc.x-comPts[i].x,2) + pow(cLoc.y-comPts[i].y,2) ));
+		trueDists.push_back( false );
+
+		if(comDists.back() < minDist){
+			minDist = comDists.back();
+			mindex = i;
+		}
+	}
+
+
+	if(mindex >= 0){
+		while( true ){ // find closest
+			//circle(tComs, comPts[mindex], 2, Scalar(127), -1, 8);
+			//circle(tComs, comPts[mindex], 1, Scalar(0), -1, 8);
+			//cout << "comDist[mindex] = " << comDists[mindex] << endl;
+
+			//namedWindow("tComs", WINDOW_NORMAL);
+			//imshow("tComs", tComs);
+			//waitKey(0);
+
+			if( trueDists[mindex]){
+				return comDists[mindex];
+			}
+			comDists[mindex] = costmap.aStarDist(cLoc, comPts[mindex]);
+			trueDists[mindex] = true;
+
+			minDist = INFINITY;
+			mindex= -1;
+			for(size_t i=0; i<comDists.size(); i++){
+				if(comDists[i] < minDist){
+					minDist = comDists[i];
+					mindex = i;
+				}
+			}
+		}
+	}
+
+	return costmap.aStarDist(cLoc, rLoc);
+}
+
+float Agent::getDistanceToReturnToRelayPt(){
+	return costmap.aStarDist(cLoc, rLoc);
+}
+
+float Agent::getDistanceToReportToOperatorFromRelayPt(){
+	// simulate communication of operator, find node on graph that is closest to agent that is in coms of operator, return it
+	Mat tComs = Mat::zeros(costmap.cells.size(), CV_8UC1);
+	graphCoordination.simulateCommunication( oLoc, tComs, costmap);
+
+	vector<Point> comPts;
+	for(size_t i=0; i<graphCoordination.thinGraph.nodeLocations.size(); i++){
+		if( tComs.at<uchar>(graphCoordination.thinGraph.nodeLocations[i]) == 255 ){
+			comPts.push_back( graphCoordination.thinGraph.nodeLocations[i] );
+			//circle(tComs, graphCoordination.thinGraph.nodeLocations[i], 2, Scalar(127), -1, 8);
+		}
+	}
+
+	//circle(tComs, cLoc, 3, Scalar(0), -1, 8);
+	//circle(tComs, cLoc, 1, Scalar(255), -1, 8);
+
+	//namedWindow("tComs", WINDOW_NORMAL);
+	//imshow("tComs", tComs);
+	//waitKey(0);
+
+	vector<float> comDists;
+	vector<bool> trueDists;
+	float minDist = INFINITY;
+	int mindex = -1;
+	for(size_t i=0; i<comPts.size(); i++){
+
+		comDists.push_back( sqrt(pow(rLoc.x-comPts[i].x,2) + pow(rLoc.y-comPts[i].y,2) ));
+		trueDists.push_back( false );
+
+		if(comDists.back() < minDist){
+			minDist = comDists.back();
+			mindex = i;
+		}
+	}
+
+
+	if(mindex >= 0){
+		while( true ){ // find closest
+			//circle(tComs, comPts[mindex], 2, Scalar(127), -1, 8);
+			//circle(tComs, comPts[mindex], 1, Scalar(0), -1, 8);
+			//cout << "comDist[mindex] = " << comDists[mindex] << endl;
+
+			//namedWindow("tComs", WINDOW_NORMAL);
+			//imshow("tComs", tComs);
+			//waitKey(0);
+
+			if( trueDists[mindex]){
+				return comDists[mindex];
+			}
+			comDists[mindex] = costmap.aStarDist(rLoc, comPts[mindex]);
+			trueDists[mindex] = true;
+
+			minDist = INFINITY;
+			mindex= -1;
+			for(size_t i=0; i<comDists.size(); i++){
+				if(comDists[i] < minDist){
+					minDist = comDists[i];
+					mindex = i;
+				}
+			}
+		}
+	}
+
+	return costmap.aStarDist(rLoc, oLoc);
+}
+
+float Agent::getDistanceToReturnToOperatorFromRelayPt(){
+	return costmap.aStarDist(oLoc, rLoc);
+}
+
+void Agent::communicate(Costmap &cIn, Market &mIn){
+	this->costmap.shareCostmap(cIn);
+	this->market.shareMarket( mIn );
+}
+
+void Agent::marketReturnInfo(Agent &a){
+
+	if( this->getDistanceToReportToOperator() < a.getDistanceToReportToOperator() ){ // I will report back
+
+		if( this->reportTime > a.reportTime ){ // if I have longer until I report
+			this->reportTime = a.reportTime; // I get their report time
+		}
+
+		a.reportTime = a.reportInterval; // they reset their report time
+		a.reportFlag = false;
+		a.reportCntr = 0;
+	}
+	else{ // they will report back
+		if( this->reportTime < a.reportTime ){ // if I have less report time
+			a.reportTime = this->reportTime;
+		}
+
+		this->reportTime = this->reportInterval;
+		this->reportFlag = false;
+		this->reportCntr = 0;
+	}
+}
+
+bool Agent::checkReportTime(){
+
+	if( lastReport() ){ // would this be my last time to report?
+		return false;
+	}
+
+	reportCntr++;
+	reportTime--;
+	if(reportCntr >= reportTime){ // has enough time gone by? if yes check distance to update time
+		// may not have travelled in a straight line away from operator location
+		float dR = getDistanceToReportToOperator();
+
+		if( dR >= reportTime){
+			reportFlag = true;
+			return true;
+		}
+		else{
+			reportCntr = reportTime - dR;
+			reportFlag = false;
+			return false;
+		}
+	}
+	else{
+		reportFlag = false;
+		return false;
+	}
+}
+
+bool Agent::lastReport(){
+
+	// if 1.5 * report interval < return time left then this is the last report, disable reporting
+	if( batteryLeft < 1.5*reportInterval ){
+		return true;
+	}
+	return false;
+}
+
+bool Agent::checkReturnTime(){
+
+	batteryLeft--; // assume I spent one unit of energy
+	returnTime++; // assume I took a step away from operator
+	if(returnTime >= batteryLeft){
+
+		float dR;
+		if(relayFlag){
+			dR = getDistanceToReportToOperatorFromRelayPt() + getDistanceToReturnToRelayPt();
+		}
+		else if( sacrificeFlag ){
+			dR = getDistanceToReportToRelayPt();
+		}
+		else{
+			dR = getDistanceToReturnToOperator();
+		}
+
+		if( dR + 0*dR >= batteryLeft){
+			returnFlag = true;
+			return true;
+		}
+		else{
+			returnTime = dR + 0*dR; // time it takes to return from current location plus slop
+			returnFlag = true;
+			return true;
+		}
+	}
+	else{
+		returnFlag = false;
+		return false;
+	}
+}
+
+bool Agent::checkForExplorationFinished(){
+
+	for(int i=0; i<costmap.cells.cols; i++){
+		for(int j=0; j<costmap.cells.rows; j++){
+			Point t(i,j);
+			if(costmap.cells.at<short>(t) == costmap.infFree || costmap.cells.at<short>(t) == costmap.domFree){
+				return false;
+			}
+		}
+	}
+	return true;
+
+}
+
+void Agent::infer( string inferenceMethod,  World &world ){
+	this->inference.makeInference( inferenceMethod, this->costmap, world);
+}
+
+void Agent::plan( string planMethod ){
+
+
+	// all agents check if they should return, includes relay / sacrifice / normal
+	if( checkReturnTime() || checkForExplorationFinished() ){
+		if(relayFlag){
+			gLoc = returnToRelayPt();
+			return;
+		}
+		else if( sacrificeFlag ){
+			gLoc = reportToRelayPt();
+			return;
+		}
+		else{
+			gLoc = returnToOperator();
+			return;
+		}
+	}
+
+	// all agents check if they should report
+	if( checkReportTime() ){
+		gLoc = reportToOperator();
+		return;
+	}
+
+	planExplore(planMethod);
+}
+
+void Agent::marketRelaySacrifice(Agent &a){
+
+	if( !this->sacrificeFlag ){ // I'm not a sacrifice
+		if( !a.sacrificeFlag || !a.relayFlag ){ // and they're not already a relay or sacrifice
+
+			if( this->relayFlag ){ // I'm a relay
+				a.sacrificeFlag = true;
+				a.rLoc = this->rLoc;
+				this->sacrificeList.push_back( a.myIndex );
+			}
+			else if( this->myIndex > a.myIndex ){
+				this->relayFlag = true;
+				a.sacrificeFlag = true;
+				this->rLoc = a.cLoc; // rLoc is sacrifices location to extend range
+				a.rLoc = a.cLoc;
+				this->sacrificeList.push_back( a.myIndex );
+			}
+			else{
+				a.relayFlag = true;
+				this->sacrificeFlag = true;
+				a.rLoc = this->cLoc; // rLoc is sacrifices location to extend range
+				this->rLoc = this->cLoc;
+				a.sacrificeList.push_back( this->myIndex );
+			}
+		}
+		else if( a.relayFlag && a.myIndex == this->myRelay ){ // theyre my relay, update rLoc
+
+			a.rLoc = this->cLoc; // rLoc is sacrifices location to extend range
+			this->rLoc = this->cLoc;
+
+		}
+	}
+}
+
+Point Agent::returnToRelayPt(){
+	return rLoc;
+}
+
+Point Agent::reportToRelayPt(){
+	// simulate communication of operator, find node on graph that is closest to agent that is in coms of operator, return it
+	Mat tComs = Mat::zeros(costmap.cells.size(), CV_8UC1);
+	graphCoordination.simulateCommunication( rLoc, tComs, costmap);
+
+	vector<Point> comPts;
+	for(size_t i=0; i<graphCoordination.thinGraph.nodeLocations.size(); i++){
+		if( tComs.at<uchar>(graphCoordination.thinGraph.nodeLocations[i]) == 255 ){
+			comPts.push_back( graphCoordination.thinGraph.nodeLocations[i] );
+		}
+	}
+
+	vector<float> comDists;
+	vector<bool> trueDists;
+	float minDist = INFINITY;
+	int mindex = -1;
+	for(size_t i=0; i<comPts.size(); i++){
+
+		comDists.push_back( sqrt(pow(cLoc.x-comPts[i].x,2) + pow(cLoc.y-comPts[i].y,2) ));
+		trueDists.push_back( false );
+
+		if(comDists.back() < minDist){
+			minDist = comDists.back();
+			mindex = i;
+		}
+	}
+
+	if(mindex >= 0){
+		while( true ){ // find closest
+			if( trueDists[mindex]){
+				return comPts[mindex];
+			}
+			comDists[mindex] = costmap.aStarDist(cLoc, comPts[mindex]);
+			trueDists[mindex] = true;
+
+			minDist = INFINITY;
+			mindex= -1;
+			for(size_t i=0; i<comDists.size(); i++){
+				if(comDists[i] < minDist){
+					minDist = comDists[i];
+					mindex = i;
+				}
+			}
+		}
+	}
+
+	return rLoc;
+}
+
+void Agent::planExplore(string planMethod ){
+
+	if(planMethod.compare("greedy") == 0){
+		//gLoc = this->costmapCoordination.greedyFrontierPlanner(costmap, agentLocs, myIndex);
+		if(costmapCoordination.standingBids.size() != agentLocs.size()){
+			costmapCoordination.initializeMarket(agentLocs.size());
+		}
+		else{
+			for(size_t i=0; i<market.cLocs.size(); i++){
+				costmapCoordination.standingBids[i] = market.values[i];
+				costmapCoordination.goalLocations[i] = market.cLocs[i];
+			}
+		}
+		gLoc = costmapCoordination.marketFrontiers(costmap, cLoc, myIndex);
+	}
+	else if(planMethod.compare("select") == 0){
+
+		gLoc = costmapPlanning.searchPlanner(costmap, cLoc);
+		//gLoc = costmapPlanning.mappingPlanner(costmap, cLoc);
+
+		if(gLoc.x < 0 && gLoc.y < 0){
+			cerr << "greedy" << endl;
+			if(costmap.cells.at<short>(gLoc) != costmap.infFree || (gLoc.x == cLoc.x && gLoc.y == cLoc.y) ){
+				gLoc = costmapPlanning.greedyFrontierPlanner(costmap, cLoc);
+			}
+		}
+	}
+	else if(planMethod.compare("selectPose") == 0){
+
+		float w[3] = {1, 0, 0}; // explore, search, map
+		float e[2] = {0.5, 1}; // dominated, breaches
+		float spread = 0.3; // spread rate
+		costmap.getRewardMat(w, e, spread);
+		costmap.displayThermalMat( costmap.reward );
+
+		//gLoc = costmapPlanning.explorePlanner(costmap, cLoc);
+		//gLoc = costmapPlanning.searchPlanner(costmap, cLoc);
+		//gLoc = costmapPlanning.mappingPlanner(costmap, cLoc);
+
+		clock_t tStart1 = clock();
+		graphCoordination.thinGraph.createThinGraph(costmap, 1, 1);
+		printf("Time taken to create thinGraph: %.2fs\n", (double)(clock() - tStart1)/CLOCKS_PER_SEC);
+		cout << "thinGraph.size(): " << graphCoordination.thinGraph.nodeLocations.size() << endl;
+
+
+		graphCoordination.findPosesEvolution( costmap );
+		cout << "out" << endl;
+		cout << "Agent::act::found graphPoses with " << this->graphCoordination.poseGraph.nodeLocations.size() << " nodes" << endl;
+
+		//this->inference.makeVisualInference(costmap, graphCoordination.thinGraph);
+
+		if(graphCoordination.poseGraph.nodeLocations.size() < 1){
+			cout << "PoseGraph.size() == 0" << endl;
+			gLoc = costmapPlanning.explorePlanner(costmap, cLoc);
+			//gLoc = costmapPlanning.greedyFrontierPlanner(costmap, cLoc);
+		}
+		else{
+			//gLoc = costmapPlanning.explorePlanner(costmap, cLoc);
+			graphCoordination.marketPoses( costmap, cLoc, gLoc, market );
+		}
+
+
+
+		//graphCoordination.displayPoseGraph( costmap );
+
+		if(gLoc.x < 0 || gLoc.y < 0){
+			cerr << "greedy" << endl;
+			if(costmap.cells.at<short>(gLoc) != costmap.infFree || (gLoc.x == cLoc.x && gLoc.y == cLoc.y) ){
+				gLoc = costmapPlanning.greedyFrontierPlanner(costmap, cLoc);
+			}
+		}
+		cout << "A" << endl;
+	}
+	else if(planMethod.compare("pose") == 0){
+		graphCoordination.travelGraph.createPRMGraph(cLoc, costmap, 3, 9);
+		//this->graph.displayCoordMap(this->costmap, false);
+		//waitKey(10);
+
+		graphCoordination.findPosesEvolution(graphCoordination.travelGraph, costmap, agentLocs);
+
+		if(this->graphCoordination.poseGraph.nodeLocations.size() == 1){ // only one pose, switch to greedy
+			gLoc = this->costmapPlanning.greedyFrontierPlanner(costmap, cLoc);
+		}
+		else{
+			cout << "Agent::coordinatedPlan::found graphPoses with " << this->graphCoordination.poseGraph.nodeLocations.size() << " nodes" << endl;
+
+			gLoc = graphCoordination.posePathPlanningTSP(graphCoordination.travelGraph, costmap, agentLocs, myIndex);
+		}
+	}
 }
 
 void Agent::act(){
@@ -47,207 +646,9 @@ void Agent::act(){
 	myPath = costmap.aStarPath(cLoc, gLoc);
 	cLoc = myPath[1];
 	myPath.erase(myPath.begin());
-	cerr << "Agent::act::cLoc / gLoc: " << cLoc << " / " << gLoc << endl;
-	//cout << "Agent::act::out" << endl;
+	cout << "Agent::act::cLoc / gLoc / reportCntr / batteryLeft / returnTime: " << cLoc << " / " << gLoc << " / " << reportCntr << " / " << batteryLeft << " / " << returnTime << endl;
+	cout << "Agent::act:: reportFlag / returnFlag = " << reportFlag << " / " << returnFlag << endl;
 }
-
-void Agent::coordinatedPlan(string method, int timeLeft, vector<Agent> &agents){
-
-	if(method.compare("greedy") == 0){
-		//gLoc = this->costmapCoordination.greedyFrontierPlanner(costmap, agentLocs, myIndex);
-		if(costmapCoordination.standingBids.size() != agentLocs.size()){
-			costmapCoordination.initializeMarket(agentLocs.size());
-		}
-		else{
-			for(size_t i=0; i<agents.size(); i++){
-				costmapCoordination.standingBids[i] = agents[i].costmapCoordination.standingBids[i];
-				costmapCoordination.goalLocations[i] = agents[i].costmapCoordination.goalLocations[i];
-			}
-		}
-		cerr << "a" << endl;
-		gLoc = costmapCoordination.marketFrontiers(costmap, cLoc, myIndex);
-	}
-	else if(method.compare("select") == 0){
-
-		gLoc = costmapPlanning.searchPlanner(costmap, cLoc);
-		//gLoc = costmapPlanning.mappingPlanner(costmap, cLoc);
-
-		if(gLoc.x < 0 && gLoc.y < 0){
-			cerr << "greedy" << endl;
-			if(costmap.cells.at<short>(gLoc) != costmap.infFree || (gLoc.x == cLoc.x && gLoc.y == cLoc.y) ){
-				gLoc = costmapPlanning.greedyFrontierPlanner(costmap, cLoc);
-			}
-		}
-
-		cerr << "1" << endl;
-
-	}
-	else if(method.compare("selectPose") == 0){
-
-		float w[3] = {1, 0, 0}; // explore, search, map
-		float e[2] = {0.5, 1}; // dominated, breaches
-		float spread = 0; // spread rate
-		costmap.getRewardMat(w, e, spread);
-		costmap.displayThermalMat( costmap.reward );
-
-		//gLoc = costmapPlanning.explorePlanner(costmap, cLoc);
-		//gLoc = costmapPlanning.searchPlanner(costmap, cLoc);
-		//gLoc = costmapPlanning.mappingPlanner(costmap, cLoc);
-
-		clock_t tStart1 = clock();
-		graphCoordination.thinGraph.createThinGraph(costmap, 1, 1);
-		printf("Time taken to create thinGraph: %.2fs\n", (double)(clock() - tStart1)/CLOCKS_PER_SEC);
-		cout << "thinGraph.size(): " << graphCoordination.thinGraph.nodeLocations.size() << endl;
-
-
-		graphCoordination.findPosesEvolution( costmap );
-		cerr << "out" << endl;
-		cerr << "Agent::act::found graphPoses with " << this->graphCoordination.poseGraph.nodeLocations.size() << " nodes" << endl;
-
-		if(graphCoordination.poseGraph.nodeLocations.size() < 1){
-			cerr << "PoseGraph.size() == 0" << endl;
-			gLoc = costmapPlanning.explorePlanner(costmap, cLoc);
-			//gLoc = costmapPlanning.greedyFrontierPlanner(costmap, cLoc);
-		}
-		else{
-			//gLoc = costmapPlanning.explorePlanner(costmap, cLoc);
-			graphCoordination.marketPoses( costmap, cLoc, gLoc, market );
-		}
-
-		//graphCoordination.displayPoseGraph( costmap );
-
-		if(gLoc.x < 0 || gLoc.y < 0){
-			cerr << "greedy" << endl;
-			if(costmap.cells.at<short>(gLoc) != costmap.infFree || (gLoc.x == cLoc.x && gLoc.y == cLoc.y) ){
-				gLoc = costmapPlanning.greedyFrontierPlanner(costmap, cLoc);
-			}
-		}
-		cerr << "A" << endl;
-	}
-	else if(method.compare("pose") == 0){
-		graphCoordination.travelGraph.createPRMGraph(cLoc, costmap, 3, 9);
-		//this->graph.displayCoordMap(this->costmap, false);
-		//waitKey(10);
-
-		graphCoordination.findPosesEvolution(graphCoordination.travelGraph, costmap, agentLocs);
-
-		if(this->graphCoordination.poseGraph.nodeLocations.size() == 1){ // only one pose, switch to greedy
-			gLoc = this->costmapPlanning.greedyFrontierPlanner(costmap, cLoc);
-		}
-		else{
-			cout << "Agent::coordinatedPlan::found graphPoses with " << this->graphCoordination.poseGraph.nodeLocations.size() << " nodes" << endl;
-
-			gLoc = graphCoordination.posePathPlanningTSP(graphCoordination.travelGraph, costmap, agentLocs, myIndex);
-		}
-	}
-}
-
-
-void Agent::soloPlan(string method, int timeLeft){
-
-	if(method.compare("greedy") == 0){
-
-		//graphPlanning.prmGraph.updatePRMGraph(costmap, 5, 5, 20);
-		//graphPlanning.prmGraph.displayCoordMap(costmap, true);
-
-		if(costmap.cells.at<short>(gLoc) != costmap.infFree || (gLoc.x == cLoc.x && gLoc.y == cLoc.y) ){
-			cout << "going into costmapPlanning.GreedyFrontierPlanner" << endl;
-			gLoc = costmapPlanning.greedyFrontierPlanner(costmap, cLoc);
-			cout << "gLoc: " << gLoc.x << " , " << gLoc.y << endl;
-		}
-	}
-	else if(method.compare("select") == 0){
-
-		float w[3] = {1, 1, 0.5}; // explore, search, map
-		float e[2] = {0.5, 5}; // dominated, breaches
-		float spread = 0.5; // spread rate
-		costmap.getRewardMat(w, e, spread);
-		costmap.displayThermalMat( costmap.reward );
-
-		//gLoc = costmapPlanning.explorePlanner(costmap, cLoc);
-		//gLoc = costmapPlanning.searchPlanner(costmap, cLoc);
-		//gLoc = costmapPlanning.mappingPlanner(costmap, cLoc);
-
-		gLoc.x = -1;
-		gLoc.y = -1;
-
-		if(gLoc.x < 0 || gLoc.y < 0){
-			cerr << "greedy" << endl;
-			if(costmap.cells.at<short>(gLoc) != costmap.infFree || (gLoc.x == cLoc.x && gLoc.y == cLoc.y) ){
-				gLoc = costmapPlanning.greedyFrontierPlanner(costmap, cLoc);
-			}
-		}
-	}
-	else if(method.compare("selectPose") == 0){
-
-		float w[3] = {1, 0, 0}; // explore, search, map
-		float e[2] = {0.5, 1}; // dominated, breaches
-		float spread = 0; // spread rate
-		costmap.getRewardMat(w, e, spread);
-		costmap.displayThermalMat( costmap.reward );
-
-		//gLoc = costmapPlanning.explorePlanner(costmap, cLoc);
-		//gLoc = costmapPlanning.searchPlanner(costmap, cLoc);
-		//gLoc = costmapPlanning.mappingPlanner(costmap, cLoc);
-
-		clock_t tStart1 = clock();
-		graphPlanning.thinGraph.createThinGraph(costmap, 1, 1);
-		printf("Time taken to create thinGraph: %.2fs\n", (double)(clock() - tStart1)/CLOCKS_PER_SEC);
-		cout << "thinGraph.size(): " << graphPlanning.thinGraph.nodeLocations.size() << endl;
-
-
-		graphPlanning.findPosesEvolution( costmap );
-		cerr << "out" << endl;
-		cout << "Agent::act::found graphPoses with " << this->graphPlanning.poseGraph.nodeLocations.size() << " nodes" << endl;
-		cout << "thinGraph.size(): " << graphPlanning.thinGraph.nodeLocations.size() << endl;
-
-
-
-		if(graphPlanning.poseGraph.nodeLocations.size() < 1){
-			gLoc = costmapPlanning.greedyFrontierPlanner(costmap, cLoc);
-		}
-		else{
-			//gLoc = costmapPlanning.explorePlanner(costmap, cLoc);
-			graphPlanning.marketPoses( costmap, cLoc, gLoc );
-		}
-
-		//graphPlanning.displayPoseGraph( costmap );
-
-		if(gLoc.x < 0 || gLoc.y < 0){
-			cerr << "greedy" << endl;
-			if(costmap.cells.at<short>(gLoc) != costmap.infFree || (gLoc.x == cLoc.x && gLoc.y == cLoc.y) ){
-				gLoc = costmapPlanning.greedyFrontierPlanner(costmap, cLoc);
-			}
-		}
-
-
-	}
-	else if(method.compare("pose") == 0){
-
-		clock_t tStart1 = clock();
-		graphPlanning.travelGraph.createPRMGraph(cLoc, costmap, 2, 4);
-		printf("Time taken to getPRM: %.2fs\n", (double)(clock() - tStart1)/CLOCKS_PER_SEC);
-		cout << "travelGraph.size(): " << graphPlanning.travelGraph.nodeLocations.size() << endl;
-
-		graphPlanning.thinGraph.createThinGraph(costmap, 2, 2);
-
-		graphPlanning.findPosesEvolution( costmap );
-		cout << "Agent::act::found graphPoses with " << this->graphPlanning.poseGraph.nodeLocations.size() << " nodes" << endl;
-		cout << "thinGraph.size(): " << graphPlanning.thinGraph.nodeLocations.size() << endl;
-
-
-
-		if(graphPlanning.poseGraph.nodeLocations.size() <= 1){
-			gLoc = costmapPlanning.greedyFrontierPlanner(costmap, cLoc);
-		}
-		else{
-			gLoc = graphPlanning.TSPPosePathPlanning(costmap);
-			//gLoc = this->graphPlanning.MCTSPosePathPlanning(timeLeft, graph, costmap);
-		}
-	}
-	cerr << "out of solo plan" << endl;
-}
-
 
 void Agent::showCellsPlot(){
 	costmap.buildCellsPlot();
@@ -301,14 +702,21 @@ void Agent::pickMyColor(){
 		this->myColor[2] = 51;
 	}
 	else if(this->myIndex == 8){
-		this->myColor[0] = 255;
-		this->myColor[1] = 255;
-		this->myColor[2] = 255;
+		this->myColor[0] = 127;
+		this->myColor[1] = 127;
+		this->myColor[2] = 127;
 	}
 	else if(this->myIndex == 9){
 		// white
 	}
 }
+
+Agent::~Agent() {
+
+}
+
+/*
+ *
 
 void Agent::shareCostmap(Costmap &A, Costmap &B){
 	for(int i=0; i<A.cells.cols; i++){
@@ -316,7 +724,6 @@ void Agent::shareCostmap(Costmap &A, Costmap &B){
 			Point a(i,j);
 
 			// share cells
-
 			if(A.cells.at<short>(a) != B.cells.at<short>(a) ){ // do we think the same thing?
 				if(A.cells.at<short>(a) == A.unknown){
 					A.cells.at<short>(a) = B.cells.at<short>(a); // if A doesn't know, anything is better
@@ -336,9 +743,23 @@ void Agent::shareCostmap(Costmap &A, Costmap &B){
 				}
 			}
 
+			if(A.cells.at<short>(a) != B.cells.at<short>(a) ){ // do we think the same thing?
+
+				if(A.cells.at<short>(a) != A.obsFree && A.cells.at<short>(a) != A.obsWall){ // if A hasn't observed anything
+					if(B.cells.at<short>(a) == B.obsFree || B.cells.at<short>(a) == B.obsWall){ // B has observed
+						A.cells.at<short>(a) = B.cells.at<short>(a); // update A
+					}
+				}
+
+				if(B.cells.at<short>(a) != B.obsFree && B.cells.at<short>(a) != B.obsWall){ // if B hasn't observed anything
+					if(A.cells.at<short>(a) == A.obsFree || A.cells.at<short>(a) == A.obsWall){ // A has observed
+						B.cells.at<short>(a) = A.cells.at<short>(a); // update B
+					}
+				}
+			}
+
 
 			// share search
-			/*
 			if(A.searchReward.at<float>(a) < B.searchReward.at<float>(a) ){ // do we think the same thing?
 				B.searchReward.at<float>(a) = A.searchReward.at<float>(a);
 			}
@@ -371,12 +792,113 @@ void Agent::shareCostmap(Costmap &A, Costmap &B){
 			else{
 				A.occ.at<float>(a) = B.occ.at<float>(a);
 			}
-			*/
 		}
 	}
 }
 
-Agent::~Agent() {
+void Agent::soloPlan(string method, int timeLeft){
 
+	if(method.compare("greedy") == 0){
+
+		//graphPlanning.prmGraph.updatePRMGraph(costmap, 5, 5, 20);
+		//graphPlanning.prmGraph.displayCoordMap(costmap, true);
+
+		if(costmap.cells.at<short>(gLoc) != costmap.infFree || (gLoc.x == cLoc.x && gLoc.y == cLoc.y) ){
+			cout << "going into costmapPlanning.GreedyFrontierPlanner" << endl;
+			gLoc = costmapPlanning.greedyFrontierPlanner(costmap, cLoc);
+			cout << "gLoc: " << gLoc.x << " , " << gLoc.y << endl;
+		}
+	}
+	else if(method.compare("select") == 0){
+
+		float w[3] = {1, 1, 0.5}; // explore, search, map
+		float e[2] = {0.5, 5}; // dominated, breaches
+		float spread = 0.5; // spread rate
+		costmap.getRewardMat(w, e, spread);
+		costmap.displayThermalMat( costmap.reward );
+
+		//gLoc = costmapPlanning.explorePlanner(costmap, cLoc);
+		//gLoc = costmapPlanning.searchPlanner(costmap, cLoc);
+		//gLoc = costmapPlanning.mappingPlanner(costmap, cLoc);
+
+		gLoc.x = -1;
+		gLoc.y = -1;
+
+		if(gLoc.x < 0 || gLoc.y < 0){
+			cerr << "greedy" << endl;
+			if(costmap.cells.at<short>(gLoc) != costmap.infFree || (gLoc.x == cLoc.x && gLoc.y == cLoc.y) ){
+				gLoc = costmapPlanning.greedyFrontierPlanner(costmap, cLoc);
+			}
+		}
+	}
+	else if(method.compare("selectPose") == 0){
+
+		float w[3] = {1, 0, 0}; // explore, search, map
+		float e[2] = {0.5, 1}; // dominated, breaches
+		float spread = 0; // spread rate
+		costmap.getRewardMat(w, e, spread);
+		costmap.displayThermalMat( costmap.reward );
+
+		//gLoc = costmapPlanning.explorePlanner(costmap, cLoc);
+		//gLoc = costmapPlanning.searchPlanner(costmap, cLoc);
+		//gLoc = costmapPlanning.mappingPlanner(costmap, cLoc);
+
+		clock_t tStart1 = clock();
+		graphPlanning.thinGraph.createThinGraph(costmap, 1, 1);
+		printf("Time taken to create thinGraph: %.2fs\n", (double)(clock() - tStart1)/CLOCKS_PER_SEC);
+		cout << "thinGraph.size(): " << graphPlanning.thinGraph.nodeLocations.size() << endl;
+
+		tStart1 = clock();
+		graphPlanning.findPosesEvolution( costmap );
+		printf("Time taken to find poses 1: %.2fs\n", (double)(clock() - tStart1)/CLOCKS_PER_SEC);
+		cerr << "out" << endl;
+		cout << "Agent::act::found graphPoses with " << this->graphPlanning.poseGraph.nodeLocations.size() << " nodes" << endl;
+		cout << "thinGraph.size(): " << graphPlanning.thinGraph.nodeLocations.size() << endl;
+
+
+		if(graphPlanning.poseGraph.nodeLocations.size() < 1){
+			gLoc = costmapPlanning.greedyFrontierPlanner(costmap, cLoc);
+		}
+		else{
+			//gLoc = costmapPlanning.explorePlanner(costmap, cLoc);
+			graphPlanning.marketPoses( costmap, cLoc, gLoc );
+		}
+
+		//graphPlanning.displayPoseGraph( costmap );
+
+		if(gLoc.x < 0 || gLoc.y < 0){
+			cerr << "greedy" << endl;
+			if(costmap.cells.at<short>(gLoc) != costmap.infFree || (gLoc.x == cLoc.x && gLoc.y == cLoc.y) ){
+				gLoc = costmapPlanning.greedyFrontierPlanner(costmap, cLoc);
+			}
+		}
+
+
+	}
+	else if(method.compare("pose") == 0){
+
+		clock_t tStart1 = clock();
+		graphPlanning.travelGraph.createPRMGraph(cLoc, costmap, 2, 4);
+		printf("Time taken to getPRM: %.2fs\n", (double)(clock() - tStart1)/CLOCKS_PER_SEC);
+		cout << "travelGraph.size(): " << graphPlanning.travelGraph.nodeLocations.size() << endl;
+
+		graphPlanning.thinGraph.createThinGraph(costmap, 2, 2);
+
+		graphPlanning.findPosesEvolution( costmap );
+		cout << "Agent::act::found graphPoses with " << this->graphPlanning.poseGraph.nodeLocations.size() << " nodes" << endl;
+		cout << "thinGraph.size(): " << graphPlanning.thinGraph.nodeLocations.size() << endl;
+
+
+
+		if(graphPlanning.poseGraph.nodeLocations.size() <= 1){
+			gLoc = costmapPlanning.greedyFrontierPlanner(costmap, cLoc);
+		}
+		else{
+			gLoc = graphPlanning.TSPPosePathPlanning(costmap);
+			//gLoc = this->graphPlanning.MCTSPosePathPlanning(timeLeft, graph, costmap);
+		}
+	}
+	cerr << "out of solo plan" << endl;
 }
+ */
 

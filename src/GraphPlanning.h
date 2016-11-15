@@ -34,13 +34,13 @@ public:
 
 	void marketPoses( Costmap &costmap, Point cLoc, Point &gLoc );
 	float getPoseReward( Point in, Costmap &costmap);
-	void getViews(Costmap &costmap, vector<int> cPoses, Mat &cView, float &cReward, vector<Point> &poses, vector<Mat> &views, vector<float> poseRewards, float &gReward);
+	void getViews(Costmap &costmap, vector<int> cPoses, Mat &cView, float &cReward, vector<Point> &poses, vector<Mat> &views, vector<float> &poseRewards, float &gReward);
 	void plotPoses( Costmap &costmap, vector<int> &cPoses, vector<int> &oPoses, vector<Mat> &views, vector<Point> &poses);
 	float getDiscountedRewards( Costmap &costmap, vector<Point> &locs, int i, float globalReward );
 	void simulateNULLObservation(Point pose, Mat &resultingView, Costmap &costmap);
 
 	// for finding the optimal poses
-	Graph poseGraph, travelGraph, thinGraph;
+	Graph poseGraph, thinGraph, travelGraph;
 	//ThinGraph thinGraph2;
 	PRMGraph prmGraph;
 
@@ -55,6 +55,8 @@ public:
 
 	bool gNodeValueCheck(Point cLoc, Point gLoc, Costmap &costmap);
 	void checkTSPPosePathNodes(Costmap &costmap);
+	void findNullPosesFromGraph( vector<Point> &poses, vector<float> poseRewards, Graph &graph );
+	void markNullPosesInGraph( vector<Point> &poses, vector<float> &poseRewards, Graph &graph );
 
 	void findPoseSet(Mat &costMat);
 	void simulateObservation(Point pose, Mat &resultingView, Costmap &costmap);
@@ -65,7 +67,7 @@ public:
 	vector<int> getWorkingSet(Costmap &costmap);
 	int matCount(Mat &in);
 	float observedReward(Mat &observed, Mat &reward);
-	float getGraphObservations(Graph &graph, Costmap &costmap, Mat &gView, vector<int> &workingSet);
+	//float getGraphObservations(Graph &graph, Costmap &costmap, Mat &gView, vector<int> &workingSet);
 	float getCurrentPoseSetReward(Graph &graph, Costmap &costmap, Mat &cView, vector<int> &workingSet);
 	void getOset(vector<int> &oStates, vector<int> &cStates, vector<int> &workingSet);
 

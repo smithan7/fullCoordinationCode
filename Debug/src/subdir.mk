@@ -10,6 +10,7 @@ CPP_SRCS += \
 ../src/Costmap.cpp \
 ../src/CostmapCoordination.cpp \
 ../src/CostmapPlanning.cpp \
+../src/CumulativePathPlanner.cpp \
 ../src/Frontier.cpp \
 ../src/Graph.cpp \
 ../src/GraphCoordination.cpp \
@@ -20,6 +21,7 @@ CPP_SRCS += \
 ../src/Market.cpp \
 ../src/Observer.cpp \
 ../src/PRMGraph.cpp \
+../src/Pose.cpp \
 ../src/PoseCoordination.cpp \
 ../src/RoomTemplate.cpp \
 ../src/SearchPlan.cpp \
@@ -35,6 +37,7 @@ OBJS += \
 ./src/Costmap.o \
 ./src/CostmapCoordination.o \
 ./src/CostmapPlanning.o \
+./src/CumulativePathPlanner.o \
 ./src/Frontier.o \
 ./src/Graph.o \
 ./src/GraphCoordination.o \
@@ -45,6 +48,7 @@ OBJS += \
 ./src/Market.o \
 ./src/Observer.o \
 ./src/PRMGraph.o \
+./src/Pose.o \
 ./src/PoseCoordination.o \
 ./src/RoomTemplate.o \
 ./src/SearchPlan.o \
@@ -60,6 +64,7 @@ CPP_DEPS += \
 ./src/Costmap.d \
 ./src/CostmapCoordination.d \
 ./src/CostmapPlanning.d \
+./src/CumulativePathPlanner.d \
 ./src/Frontier.d \
 ./src/Graph.d \
 ./src/GraphCoordination.d \
@@ -70,6 +75,7 @@ CPP_DEPS += \
 ./src/Market.d \
 ./src/Observer.d \
 ./src/PRMGraph.d \
+./src/Pose.d \
 ./src/PoseCoordination.d \
 ./src/RoomTemplate.d \
 ./src/SearchPlan.d \

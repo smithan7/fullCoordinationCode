@@ -39,10 +39,10 @@ void bruteForce7(vector<int> tour, vector<vector<float> > distGraph);
 
 GraphCoordination::GraphCoordination(){
 	nPullsEvolvePoseGraph = 1000;
-
 	minObsForPose = 5;
+}
 
-	int obsRadius = 40;
+void GraphCoordination::init( float obsRadius, float comRadius){
 	Mat temp =Mat::zeros(2*(obsRadius + 1), 2*(obsRadius + 1), CV_8UC1);
 	Point cent;
 	cent.x = obsRadius;
@@ -57,36 +57,56 @@ GraphCoordination::GraphCoordination(){
 			}
 		}
 	}
+
+	temp =Mat::zeros(2*(comRadius + 1), 2*(comRadius + 1), CV_8UC1);
+	cent.x = comRadius;
+	cent.y = comRadius;
+	circle(temp,cent,comRadius, Scalar(255));
+
+	for(int i=0; i<temp.cols; i++){
+		for(int j=0; j<temp.rows; j++){
+			if(temp.at<uchar>(i,j,0) == 255){
+				Point t(i-obsRadius, j-obsRadius);
+				comPerim.push_back(t);
+			}
+		}
+	}
 }
 
 void GraphCoordination::marketPoses( Costmap &costmap, Point cLoc, Point &gLoc, Market &market ){
 
-	cerr << "GraphCoordination::marketPoses::A" << endl;
+	//cerr << "GraphCoordination::marketPoses::A" << endl;
 
 	// am I closer to any poses in market than the current purchaser?
 
-	for(size_t i=0; i<market.locations.size(); i++){
+	for(size_t i=0; i<market.gLocs.size(); i++){
+		//cerr << "GraphCoordination::marketPoses::A1" << endl;
 		if( i != market.myIndex ){
 			bool flag = false;
-
-			if( market.locations[i].x > 0 && market.locations[i].y > 0){
-				if(sqrt(pow(cLoc.x - market.locations[i].x,2) + pow(cLoc.y - market.locations[i].y,2)) <  market.costs[i]){
-					if(costmap.aStarDist(market.locations[i], cLoc) > market.costs[i]){
-						cerr << "out of aStarDist: true" << endl;
+			//cerr << "GraphCoordination::marketPoses::A2" << endl;
+			if( market.gLocs[i].x > 0 && market.gLocs[i].y > 0){
+				//cerr << "GraphCoordination::marketPoses::A3" << endl;
+				if(sqrt(pow(cLoc.x - market.gLocs[i].x,2) + pow(cLoc.y - market.gLocs[i].y,2)) <  market.costs[i]){
+					//cerr << "GraphCoordination::marketPoses::A4" << endl;
+					if(costmap.aStarDist(market.gLocs[i], cLoc) > market.costs[i]){
+						//cerr << "out of aStarDist: true" << endl;
 						flag = true; // I am not a* closer
 					}
 					else{
-						cerr << "out of aStarDist: false********" << endl;
+						//cerr << "out of aStarDist: false********" << endl;
 					}
+					//cerr << "past a* t/f" << endl;
 				}
 				else{ // I am not euclidian closer
+					//cerr << "GraphCoordination::marketPoses::A5" << endl;
 					flag = true;
 				}
+				//cerr << "GraphCoordination::marketPoses::A6" << endl;
 			}
-
+			//cerr << "GraphCoordination::marketPoses::A7" << endl;
 			if(flag){ // they are closer, remove all reward from their goals
 				Mat nView = Mat::zeros(costmap.cells.size(), CV_8UC1);
-				simulateObservation( market.locations[i], nView, costmap);
+				simulateObservation( market.gLocs[i], nView, costmap);
 
 				for(int j=0; j<costmap.reward.cols; j++){
 					for(int k=0; k<costmap.reward.rows; k++){
@@ -101,7 +121,7 @@ void GraphCoordination::marketPoses( Costmap &costmap, Point cLoc, Point &gLoc, 
 	}
 	//
 
-	cerr << "GraphCoordination::marketPoses::B" << endl;
+	//cerr << "GraphCoordination::marketPoses::B" << endl;
 
 
 	vector<float> poseRewards;
@@ -112,17 +132,17 @@ void GraphCoordination::marketPoses( Costmap &costmap, Point cLoc, Point &gLoc, 
 	float maxVal = -INFINITY;
 	int maxPose = -1;
 
-	cerr << "GraphCoordination::marketPoses::C" << endl;
+	//cerr << "GraphCoordination::marketPoses::C" << endl;
 
 	Mat gView = Mat::zeros(costmap.cells.size(), CV_8UC1);
-	cerr << "PoseGraph.nodeLocations: ";
+	//cerr << "PoseGraph.nodeLocations: ";
 	for(size_t i=0; i<poseGraph.nodeLocations.size(); i++){
-		cerr << poseGraph.nodeLocations[i] << ", ";
+		//cerr << poseGraph.nodeLocations[i] << ", ";
 		Mat lView = Mat::zeros( costmap.cells.size(), CV_8UC1);
 		simulateObservation( poseGraph.nodeLocations[i], lView, costmap );
 		bitwise_or(gView, lView, gView);
 	}
-	cerr << endl;
+	//cerr << endl;
 	float globalReward = observedReward( gView, costmap.reward );
 
 	for(size_t i=0; i<poseGraph.nodeLocations.size(); i++){
@@ -132,14 +152,12 @@ void GraphCoordination::marketPoses( Costmap &costmap, Point cLoc, Point &gLoc, 
 			poseRewards.back() = -INFINITY;
 		}
 
-
-
 		poseDistances.push_back( sqrt(pow(cLoc.x-poseGraph.nodeLocations[i].x,2) + pow(cLoc.y-poseGraph.nodeLocations[i].y,2) ));
 		trueDist.push_back( false );
 
 		poseValue.push_back( poseRewards.back() - 0.1*pow(poseDistances.back(),2) );
 
-		cout << "index, location, value, rewards, distance: " << i << ", " << poseGraph.nodeLocations[i] << ", " << poseValue.back() << ", " << poseRewards.back() << ", " << poseDistances.back() << endl;
+		//cout << "index, location, value, rewards, distance: " << i << ", " << poseGraph.nodeLocations[i] << ", " << poseValue.back() << ", " << poseRewards.back() << ", " << poseDistances.back() << endl;
 
 		if(poseValue.back() > maxVal){
 			maxVal = poseValue.back();
@@ -147,42 +165,52 @@ void GraphCoordination::marketPoses( Costmap &costmap, Point cLoc, Point &gLoc, 
 		}
 	}
 
-	cerr << "GraphCoordination::marketPoses::D" << endl;
 
-	while( true ){ // find best pose
+	if(maxPose >= 0){
+		//cerr << "GraphCoordination::marketPoses::D" << endl;
 
-		if( trueDist[maxPose]){
-			break;
-		}
+		while( true ){ // find best pose
 
-		poseDistances[maxPose] = costmap.aStarDist(cLoc, poseGraph.nodeLocations[maxPose]);
-		poseValue[maxPose] = poseRewards[maxPose] - 0.1*pow(poseDistances[maxPose],2);
-		cerr << "GraphCoordination::marketPoses::poseValue[maxPose]: " << poseValue[maxPose] << endl;
-		trueDist[maxPose] = true;
-
-		maxVal = -INFINITY;
-		maxPose = -1;
-		for(size_t i=0; i<poseValue.size(); i++){
-			if(poseValue[i] > maxVal){
-				maxPose = i;
-				maxVal = poseValue[i];
+			//cerr << "GraphCoordination::marketPoses::D1: maxPose = " << maxPose << endl;
+			if( trueDist[maxPose]){
+				break;
 			}
+			//cerr << "GraphCoordination::marketPoses::D2" << endl;
+
+			poseDistances[maxPose] = costmap.aStarDist(cLoc, poseGraph.nodeLocations[maxPose]);
+			//cerr << "GraphCoordination::marketPoses::D3" << endl;
+			poseValue[maxPose] = poseRewards[maxPose] - 0.1*pow(poseDistances[maxPose],2);
+
+			//cerr << "GraphCoordination::marketPoses::D4:poseValue[maxPose]: " << poseValue[maxPose] << endl;
+			trueDist[maxPose] = true;
+
+			maxVal = -INFINITY;
+			maxPose = -1;
+			for(size_t i=0; i<poseValue.size(); i++){
+				if(poseValue[i] > maxVal){
+					maxPose = i;
+					maxVal = poseValue[i];
+				}
+			}
+			//cerr << "GraphCoordination::marketPoses::D5" << endl;
+
+
+			//cout << "maxPose: index, value, rewards, distance: " << maxPose << ", " << poseValue[maxPose] << ", " << poseRewards[maxPose] << ", " << poseDistances[maxPose] << endl;
 		}
-		cerr << "GraphCoordination::marketPoses::D5" << endl;
 
+		//cerr << "GraphCoordination::marketPoses::gValue: " << poseValue[maxPose] << endl;
+		//cerr << "GraphCoordination::marketPoses::goalPose: " << poseGraph.nodeLocations[maxPose] << endl;
 
-		//cout << "maxPose: index, value, rewards, distance: " << maxPose << ", " << poseValue[maxPose] << ", " << poseRewards[maxPose] << ", " << poseDistances[maxPose] << endl;
+		gLoc = poseGraph.nodeLocations[maxPose];
+
+		market.gLocs[market.myIndex] = gLoc;
+		market.costs[market.myIndex] = poseDistances[maxPose];
+
+		//cerr << "GraphCoordination::marketPoses::Z" << endl;
 	}
-
-	cerr << "GraphCoordination::marketPoses::gValue: " << poseValue[maxPose] << endl;
-	cerr << "GraphCoordination::marketPoses::goalPose: " << poseGraph.nodeLocations[maxPose] << endl;
-
-	gLoc = poseGraph.nodeLocations[maxPose];
-
-	market.locations[market.myIndex] = gLoc;
-	market.costs[market.myIndex] = poseDistances[maxPose];
-
-	cerr << "GraphCoordination::marketPoses::Z" << endl;
+	else{
+		gLoc = cLoc;
+	}
 }
 
 void GraphCoordination::simulateNULLObservation(Point pose, Mat &resultingView, Costmap &costmap){
@@ -278,7 +306,7 @@ void GraphCoordination::plotPoses( Costmap &costmap, vector<int> &cPoses, vector
 
 void GraphCoordination::findPosesEvolution(Costmap &costmap){
 
-	cerr << "GraphCoordination::findPosesEvolution::A" << endl;
+	//cout << "GraphCoordination::findPosesEvolution::A" << endl;
 
 	// get graph observations and global reward
 	vector<int> oPoses, cPoses, bPoses;
@@ -286,40 +314,64 @@ void GraphCoordination::findPosesEvolution(Costmap &costmap){
 	vector<Mat> poseViews;
 	vector<float> poseRewards;
 
-	// add new nodes
-	for(size_t i=0; i<thinGraph.nodeLocations.size(); i++){
-		oPoses.push_back(i);
-		poseLocations.push_back( thinGraph.nodeLocations[i] );
-	}
-
-	// add old nodes
-	cerr << "PoseGraph: ";
-	for(size_t i=0; i<poseGraph.nodeLocations.size(); i++){
-		cPoses.push_back( oPoses.size() + i );
-		poseLocations.push_back( poseGraph.nodeLocations[i] );
-		cerr << poseGraph.nodeLocations[i] << ", ";
-	}
-	cerr << endl;
-
-	// for determing the num optimization iterations
-	int cInit = cPoses.size();
-
-	float cReward, gReward;
+	// add old nodes and get view
 	Mat cView = Mat::zeros(costmap.cells.size(), CV_8UC1);
-	getViews(costmap, cPoses, cView, cReward, poseLocations, poseViews, poseRewards, gReward);
-	plotPoses( costmap, cPoses, oPoses, poseViews , poseLocations);
+	for(size_t i=0; i<poseGraph.nodeLocations.size(); i++){
+		poseLocations.push_back( poseGraph.nodeLocations[i] );
+		Mat tView = Mat::zeros(costmap.cells.size(), CV_8UC1);
+		simulateObservation(poseGraph.nodeLocations[i], tView, costmap);
+		poseViews.push_back(tView);
+		float tReward = observedReward( tView, costmap.reward );
+		poseRewards.push_back( tReward );
+		if( tReward > 0 ){
+			cPoses.push_back(i);
+			bitwise_or(cView, tView, cView);
+		}
+	}
+	float cReward = observedReward( cView, costmap.reward );
+	Mat gView = Mat::ones(costmap.cells.size(), CV_8UC1)*255;
+	float gReward = observedReward( gView, costmap.reward );
 
-	cerr << "GraphCoordination::findPosesEvolution::C::cReward / gReward: " << cReward << " / " << gReward << endl;
+	// add potential new nodes
+	for(size_t i=0; i<thinGraph.nodeLocations.size(); i++){
+		oPoses.push_back( cPoses.size() + i );
+		poseLocations.push_back( thinGraph.nodeLocations[i] );
+		poseRewards.push_back(-1);
+		Mat tView = Mat::zeros(costmap.cells.size(), CV_8UC1);
+		poseViews.push_back(tView);
+	}
+
+	// any poses with 0 reward removed from cPoses
+	for(size_t i=0; i<cPoses.size(); i++){
+		int t = cPoses[i];
+		if( poseRewards[ t ] <= 0){
+			cPoses.erase(cPoses.begin() + i);
+			oPoses.push_back( t );
+		}
+	}
+
+	//cout << "GraphCoordination::findPosesEvolution::C::cReward / gReward: " << cReward << " / " << gReward << endl;
+
 
 	// add more nodes to pose graph if not fully observing world
-	while(cReward < gReward){ // add states that increase the observed are until % is observed
+
+	clock_t tStart1 = clock();
+	int iter = 0;
+	while(cReward < gReward && iter < 500){ // add states that increase the observed are until % is observed
+		iter++;
 		int c = rand() % oPoses.size();
+		int index = oPoses[c];
+		if(poseRewards[index] == -1){
+			simulateObservation(poseLocations[index], poseViews[index], costmap);
+			poseRewards[index] = observedReward( poseViews[index], costmap.reward );
+		}
+
 		Mat tView;
-		bitwise_or(cView, poseViews[ oPoses[c] ], tView);
+		bitwise_or(cView, poseViews[ index ], tView);
 		float tReward = observedReward(tView, costmap.reward);
 
 		if(tReward > cReward){
-			cPoses.push_back( oPoses[c] );
+			cPoses.push_back( index );
 
 			cView = tView;
 			cReward = tReward;
@@ -327,74 +379,31 @@ void GraphCoordination::findPosesEvolution(Costmap &costmap){
 			oPoses.erase(oPoses.begin() + c);
 		}
 	}
+	printf("Time taken to create get poses: %.2fs\n", (double)(clock() - tStart1)/CLOCKS_PER_SEC);
 
-	cerr << "GraphCoordination::findPosesEvolution::D::cReward / gReward: " << cReward << " / " << gReward << endl;
-
+	//cerr << "GraphCoordination::findPosesEvolution::D::cReward / gReward: " << cReward << " / " << gReward << endl;
 	int cPost = cPoses.size();
+	iter = 0;
+	while( iter < cPost ){
+		int dP = cPoses[iter];
 
-	plotPoses( costmap, cPoses, oPoses, poseViews , poseLocations);
-	waitKey(1);
-
-
-	if( cPoses.size() + oPoses.size() > 2){
-		vector<int> op, cp;
-
-		for(int i=0; i<10*cPost; i++){
-
-			op.clear();
-			for(size_t i=0; i<oPoses.size(); i++){
-				op.push_back(oPoses[i]);
-			}
-
-			cp.clear();
-			for(size_t i=0; i<cPoses.size(); i++){
-				cp.push_back(cPoses[i]);
-			}
-
-			if(cp.size() == 0){
-				cerr << "GraphCoordination::findPosesEvolution::Error: no poses in closed set" << endl;
-				waitKey(0);
-			}
-
-			int choose = 1;//rand() % 2;
-
-			if( choose == 0 && op.size() > 0){ // swap a state with open set
-				int oni = rand() % op.size();
-				int cni = rand() % cp.size();
-				int swpOut = cp[cni];
-
-				cp[cni] = op[oni];
-				op[oni] = swpOut;
-			}
-			else{ // erase a state
-				int cni = rand() % cp.size();
-				op.push_back(cp[cni]);
-				cp.erase(cp.begin()+cni);
-			}
-
-			Mat cView = Mat::zeros(costmap.cells.size(), CV_8UC1);
-			for(size_t i=1; i<cp.size(); i++){
-				bitwise_or(cView, poseViews[ cp[i] ], cView);
-			}
-			float cr = observedReward(cView, costmap.reward );
-
-			if(cr == gReward && cp.size() < cPoses.size()){
-				cReward = cr;
-
-				cPoses.clear();
-				for(size_t i=0; i<cp.size(); i++){
-					cPoses.push_back(cp[i]);
-				}
-
-				oPoses.clear();
-				for(size_t i=0; i<op.size(); i++){
-					oPoses.push_back(op[i]);
-				}
+		Mat dMat = Mat::zeros(costmap.cells.size(), CV_8UC1);
+		for(size_t i=0; i<cPoses.size(); i++){
+			if( int(i) != iter ){
+				bitwise_or(dMat, poseViews[i], dMat);
 			}
 		}
-	}
 
-	cerr << "GraphCoordination::findPosesEvolution::D+" << endl;
+		float dReward = observedReward( dMat, costmap.reward );
+
+		if( dReward == gReward ){
+			cPoses.erase(cPoses.begin() + iter);
+			oPoses.push_back( dP );
+			cPost--;
+			cerr << "erased dP" << endl;
+		}
+		iter++;
+	}
 
 	plotPoses( costmap, cPoses, oPoses, poseViews , poseLocations);
 	waitKey(1);
@@ -406,14 +415,7 @@ void GraphCoordination::findPosesEvolution(Costmap &costmap){
 		poseGraph.nodeObservations.push_back( poseViews[ cPoses[i] ] );
 	}
 
-	cerr << "PoseGraph: ";
-	for(size_t i=0; i<poseGraph.nodeLocations.size(); i++){
-		cerr << poseGraph.nodeLocations[i] << ", ";
-	}
-	cerr << endl;
-	waitKey(1);
-
-	cerr << "GraphCoordination::findPosesEvolution::E" << endl;
+	//cerr << "GraphCoordination::findPosesEvolution::E" << endl;
 }
 
 void GraphCoordination::getOset(vector<int> &oStates, vector<int> &cStates, vector<int> &workingSet){
@@ -456,6 +458,34 @@ void GraphCoordination::simulateObservation(Point pose, Mat &resultingView, Cost
 			Point pp  = it.pos();
 
 			if(costmap.cells.at<short>(pp) > costmap.domFree){
+				break;
+			}
+			else{// if(costmap.cells.at<short>(x0, y0) == costmap.infFree){
+				resultingView.at<uchar>(pp) = 255;
+			}
+		}
+	}
+
+	/*
+	Mat fu = resultingView.clone();
+	circle(fu, pose, 2, Scalar(127), -1, 8);
+	namedWindow("GraphCoordination::simulateView::view", WINDOW_NORMAL);
+	imshow("GraphCoordination::simulateView::view", fu);
+	waitKey(0);
+	*/
+}
+
+void GraphCoordination::simulateCommunication(Point pose, Mat &resultingView, Costmap &costmap){
+	// make perimeter of viewing circle fit on image
+
+	for(size_t i=0; i<comPerim.size(); i++){
+		Point v(comPerim[i].x + pose.x, comPerim[i].y + pose.y);
+		LineIterator it(resultingView, pose, v, 8, false);
+		for(int i=0; i<it.count; i++, ++it){
+
+			Point pp  = it.pos();
+
+			if(costmap.cells.at<short>(pp) >= costmap.obsWall){
 				break;
 			}
 			else{// if(costmap.cells.at<short>(x0, y0) == costmap.infFree){

@@ -36,6 +36,7 @@ public:
 	vector<Point> viewPerim;
 	void observe(Point cLoc, Costmap &costmap);
 	vector<Point> getObservableCells(Point p);
+	bool commoCheck(Point aLoc, Point bLoc, float comThresh);
 
 	float obsThresh; // how far can I see? LOS
 	float commThresh; // how far can I communicate, LOS

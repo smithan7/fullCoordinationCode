@@ -4,7 +4,8 @@ src/PoseCoordination.o: ../src/PoseCoordination.cpp \
  ../src/CostmapPlanning.h ../src/Contour.h ../src/Graph.h \
  ../src/GraphCoordination.h ../src/Market.h ../src/GraphPlanning.h \
  ../src/TreeNode.h ../src/ThinGraph.h ../src/PRMGraph.h \
- ../src/Inference.h ../src/BuildingTemplate.h ../src/RoomTemplate.h
+ ../src/Inference.h ../src/BuildingTemplate.h ../src/RoomTemplate.h \
+ ../src/Pose.h ../src/Observer.h
 
 ../src/PoseCoordination.h:
 
@@ -41,3 +42,7 @@ src/PoseCoordination.o: ../src/PoseCoordination.cpp \
 ../src/BuildingTemplate.h:
 
 ../src/RoomTemplate.h:
+
+../src/Pose.h:
+
+../src/Observer.h:

@@ -59,19 +59,6 @@ Inference::Inference() {
     		Point t(contours[0][i].x-obsRadius, contours[0][i].y-obsRadius);
     		viewPerim.push_back(t);
     }
-
-    /*
-	for(int i=0; i<temp.cols; i++){
-		for(int j=0; j<temp.rows; j++){
-			if(temp.at<uchar>(i,j,0) == 255){
-				vector<int> t;
-				t.push_back(i-obsRadius);
-				t.push_back(j-obsRadius);
-				viewPerim.push_back(t);
-			}
-		}
-	}
-	*/
 }
 
 void Inference::resetInference(Costmap &costmap){
@@ -149,6 +136,161 @@ void Inference::makeGlobalInference(World &world, Costmap &costmap){
 	}
 }
 
+void Inference::makeVisualInference(Costmap &costmap, Graph &graph){
+	Mat visualInferenceMat = costmap.cells.clone();
+
+	visualInferenceOnObstacleContours(costmap, visualInferenceMat);
+
+	visualInferenceOnFreeSpace( costmap, graph, visualInferenceMat);
+}
+
+void Inference::visualInferenceOnFreeSpace( Costmap &costmap, Graph &graph, Mat &visInfMat ){
+
+
+
+
+	while(1){
+		Mat graphR = Mat::zeros(visInfMat.size(), CV_8UC3);
+
+		// get views from nodes on travel graph
+		int ns = rand() % graph.nodeLocations.size();
+		Pose ps(graph.nodeLocations[ns], costmap);
+
+		ps.makeMat();
+		namedWindow("obs mat", WINDOW_NORMAL);
+		imshow("obs mat", ps.mat );
+		waitKey(1);
+
+		Pose mp(graph.nodeLocations[ns], costmap);
+
+		vector<float> rv;
+		float mr = -1;
+		for(size_t i=0; i<graph.nodeLocations.size(); i++){
+			if( i != ns ){
+				Pose ts(graph.nodeLocations[i], costmap );
+				int orient = 0;
+
+				rv.push_back( calcVisualFit( ps , ts, costmap, orient) );
+				if( rv.back() > mr ){
+					mr = rv.back();
+					mp = ps;
+				}
+
+				cerr << "r: " << rv.back() << endl;
+
+				ts.makeMat();
+				namedWindow("lib mat", WINDOW_NORMAL);
+				imshow("lib mat", ts.mat );
+				waitKey(0);
+			}
+		}
+
+		for(size_t i=0; i<rv.size(); i++){
+			Scalar rc( 255*(1-(rv[i] / mr)), 255*(1-(rv[i] / mr)), 255 );
+			circle( graphR, graph.nodeLocations[i], 2, rc, -1, 8);
+		}
+
+		circle( graphR, graph.nodeLocations[ns], 2, (255,255,255), -1, 8);
+
+		namedWindow( "vis inference rewards" , WINDOW_NORMAL);
+		imshow( "vis inference rewards", graphR);
+		waitKey(0);
+	}
+
+
+
+		// if no cells viewed are inferred, add to library
+		// if inferred cells are viewed, compare against library
+
+
+	// evaluate comparison with histogram of laser range sequence
+		// check calcCorrelation(vector<int> obs, vector<int> test)
+
+
+	// only check library sequence if mean length and standard deviation of the lengths are comparable to the observed test case
+
+
+}
+
+void Inference::visualInferenceOnObstacleContours( Costmap &costmap, Mat &visInfMat ){
+
+	// get obstacles only mat, include only obstacles inside the inferred contour
+
+
+	// erode with gaussian blur to erase skinny contours
+
+	// find contours with significant area to be inferred over
+
+	// then run graph builder on each contour to get poses
+}
+
+void Inference::addToVisualLibrary(Pose &pose){ //
+	visualLibrary.push_back(pose);
+}
+
+Pose Inference::getVisualPose(Point p, Costmap &costmap){
+	Pose a(p, costmap);
+	return a;
+}
+
+void Inference::testPoseAgainstLibrary(Pose &oPose){
+
+}
+
+float Inference::calcVisualFit(Pose &po, Pose &pl, Costmap &costmap, int &maxIter){
+
+	float maxRew = -INFINITY;
+
+	for(size_t i=0; i<po.obsLen.size(); i++){
+		float rew = 0;
+		int libIter = 0;
+		float dist;
+		for(size_t j=i; j<po.obsLen.size(); j++){
+			dist = po.obsLen[j] - pl.obsLen[libIter];
+			rew += visualReward(costmap, dist, po.obsLim[j], pl.obsLim[libIter]);
+
+			libIter++;
+		}
+
+		for(int j=0; j<i; j++){
+			dist = po.obsLen[j] - pl.obsLen[libIter];
+			cerr << "dist: " << dist << " / " << po.obsLen[j] << " / " << pl.obsLen[libIter] << endl;
+			rew += visualReward(costmap, dist, po.obsLim[j], pl.obsLim[libIter]);
+
+			libIter++;
+		}
+
+		if(rew > maxRew){
+			maxRew = rew;
+			maxIter = i;
+		}
+	}
+
+	return maxRew;
+}
+
+float Inference::visualReward(Costmap &costmap, float dist, Point &obsPt, Point &libPt){
+
+	float d2  = pow(dist,2);
+
+	if( dist <= 0 ){ // simulated point is between observer and library end pt
+		if(costmap.cells.at<short>(obsPt) == costmap.obsWall){
+			return 1/(1+d2);
+		}
+		else{ // costmap.cells.at<short>(obsPt) == costmap.infWall
+			return 0.5/(1+d2) + 0.25;
+		}
+	}
+	else{ // simulated point is outside observer and library end pt
+		if(costmap.cells.at<short>(libPt) == costmap.obsFree){ // is the place the library has a wall observed to be free, if yes, larger error
+			return 1/(1+d2);
+		}
+		else{ // costmap.cells.at<short>(obsPt) == costmap.infFree // is place the library has a wall inferred to be free, if yes, smaller error than if observed
+			return 0.5/(1+d2) + 0.25;
+		}
+	}
+}
+
 void Inference::makeStructuralInference(Costmap &costmap){
 
 	bool flag = false;
@@ -219,11 +361,6 @@ void Inference::makeStructuralInference(Costmap &costmap){
 		// close dominated contours
 		//closeDominatedContours( costmap, structInferenceMat );
 	}
-}
-
-void Inference::makeVisualInference(Costmap &costmap){
-	Mat visualInferenceMat = Mat::ones(costmap.cells.size(), CV_8UC1)*101;
-
 }
 
 void Inference::makeGeometricInference(Costmap &costmap){

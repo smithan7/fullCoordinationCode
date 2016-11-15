@@ -30,12 +30,107 @@ Costmap::Costmap(){
 	this->obsWall = 201;
 	this->infWall = 202;
 	this->inflatedWall = 203;
-
 }
 
 Costmap::~Costmap() {}
 
+void Costmap::shareCostmap( Costmap &cIn ){
+	for(int i=0; i<this->cells.cols; i++){
+		for(int j=0; j<this->cells.rows; j++){
+			Point a(i,j);
+			// share cells
+			if(this->cells.at<short>(a) != cIn.cells.at<short>(a) ){ // do we think the same thing?
+				if(cIn.cells.at<short>(a) == cIn.unknown){
+					cIn.cells.at<short>(a) = this->cells.at<short>(a); // if this->doesn't know, anything is better
+				}
+				else if(cIn.cells.at<short>(a) == cIn.infFree || cIn.cells.at<short>(a) == cIn.infWall){ // this->think its inferred
+					if(this->cells.at<short>(a) == this->obsFree || this->cells.at<short>(a) == this->obsWall){ // B has observed
+						cIn.cells.at<short>(a) = this->cells.at<short>(a);
+					}
+				}
+			}
+		}
+	}
+}
 
+void Costmap::simulateObservation(Point pose, Mat &resultingView, vector<Point> observedCells, float obsRadius){
+
+	// make perimeter of viewing circle fit on image
+	if( viewPerim.size() == 0 ){
+		Mat temp =Mat::zeros(2*(obsRadius + 1), 2*(obsRadius + 1), CV_8UC1);
+		Point cent;
+		cent.x = obsRadius;
+		cent.y = obsRadius;
+		circle(temp,cent,obsRadius, Scalar(255));
+
+		for(int i=0; i<temp.cols; i++){
+			for(int j=0; j<temp.rows; j++){
+				if(temp.at<uchar>(i,j,0) == 255){
+					Point t(i-obsRadius, j-obsRadius);
+					viewPerim.push_back(t);
+				}
+			}
+		}
+	}
+
+	for(size_t i=0; i<viewPerim.size(); i++){
+		Point v(viewPerim[i].x + pose.x, viewPerim[i].y + pose.y);
+		LineIterator it(resultingView, pose, v, 8, false);
+		for(int i=0; i<it.count; i++, ++it){
+			Point pp  = it.pos();
+			if(cells.at<short>(pp) > domFree){
+				break;
+			}
+			else{
+				resultingView.at<uchar>(pp) = 255;
+			}
+		}
+	}
+
+	/*
+	Mat fu = resultingView.clone();
+	circle(fu, pose, 2, Scalar(127), -1, 8);
+	namedWindow("GraphPlanning::simulateView::view", WINDOW_NORMAL);
+	imshow("GraphPlanning::simulateView::view", fu);
+	waitKey(0);
+	*/
+}
+
+
+void Costmap::growMatIntoFreeCells( Mat &freeMat ){
+
+	int dx[4] = {-1,1,0,0};
+	int dy[4] = {0,0,-1,1};
+	bool flag;
+
+	for(int i=0; i<20; i++){ // how far do I grow, how many growth iterations
+		Mat tempMat = Mat::zeros(freeMat.size(), CV_8UC1);
+		flag = true;
+		for(int i=1; i<freeMat.cols-1; i++){
+			for(int j=1; j<freeMat.rows-1; j++){
+				Point p(i,j);
+				if(freeMat.at<uchar>(p) == 255){ // I'm on freeMat
+					// are any of my nbrs NOT on freeMat and obsFree or infFree on costmap.cells, if yes add them to freeMat
+					for(int k=0; k<4; k++){
+						Point pp(i+dx[k], j+dy[k]);
+
+						if(freeMat.at<uchar>(pp) != 255){
+							if(cells.at<short>(pp) < unknown){
+								tempMat.at<uchar>(pp) = 255;
+								flag = false;
+							}
+						}
+					}
+				}
+			}
+		}
+		if(flag){
+			return;
+		}
+		bitwise_or(tempMat, freeMat, freeMat);
+	}
+
+}
 
 void Costmap::prettyPrintCostmap(){
 	for(int i=0; i<cells.cols; i++){
@@ -97,7 +192,7 @@ void Costmap::getRewardMat(float w[3], float e[2], float spread){
 			}
 
 			if(w[2] > 0){
-				// explore reward
+				// map reward
 				if(1-occ.at<float>(a) > occ.at<float>(a) ){
 					r[2] = occ.at<float>(a);
 				}
@@ -130,6 +225,7 @@ void Costmap::spreadSearchArea(float growthRate){
 		for(int j=1; j<cells.rows-1; j++){
 			Point loc(i,j);
 			if(cells.at<short>(loc) == obsFree){
+
 				float sReward = 0;
 				for(int a = 0; a<5; a++){
 					Point nLoc(i+sx[a], j+sy[a]);
@@ -327,8 +423,8 @@ void Costmap::getDistGraph(){
 }
 
 float Costmap::getEuclidianDistance(Point a, Point b){
-	int dx = a.x - b.x;
-	int dy = a.x - b.y;
+	int dx = abs(a.x - b.x);
+	int dy = abs(a.x - b.y);
 
 	if(euclidDist.at<float>(dx,dy) == -1){
 		euclidDist.at<float>(dx,dy) = sqrt(pow(dx,2) + pow(dy,2));
@@ -447,17 +543,18 @@ vector<Point> Costmap::aStarPath(Point sLoc, Point gLoc){
 
 float Costmap::aStarDist(Point sLoc, Point gLoc){
 
-	cerr << "into aStarDist" << endl;
+	//cerr << "Costmap::aStarDist::in" << endl;
+
 
 	if(sLoc == gLoc){
 		return 0;
 	}
 
-	Mat cSet = Mat::zeros(cells.size(), CV_16S); // 1 means in closed set, 0 means not
-	Mat oSet = Mat::zeros(cells.size(), CV_16S); // 1 means in open set, 0 means not
+	Mat cSet = Mat::zeros(cells.size(), CV_16SC1); // 1 means in closed set, 0 means not
+	Mat oSet = Mat::zeros(cells.size(), CV_16SC1); // 1 means in open set, 0 means not
 
-	Mat gScore = Mat::ones(cells.size(), CV_32F)*INFINITY; // known cost from initial node to n
-	Mat fScore = Mat::ones(cells.size(), CV_32F)*INFINITY; // known cost from initial node to n
+	Mat gScore = Mat::ones(cells.size(), CV_32FC1)*INFINITY; // known cost from initial node to n
+	Mat fScore = Mat::ones(cells.size(), CV_32FC1)*INFINITY; // known cost from initial node to n
 
 	vector<Point> oVec;
 	oVec.push_back(sLoc);
@@ -466,9 +563,11 @@ float Costmap::aStarDist(Point sLoc, Point gLoc){
 	fScore.at<float>(sLoc) = sqrt(pow(sLoc.x-gLoc.x,2) + pow(sLoc.y-gLoc.y,2));
 	fScore.at<float>(gLoc) = 1;
 
-	bool foo = true;
+	// for nbrs
+	int nx[8] = {-1,-1,-1,0,0,1,1,1};
+	int ny[8] = {1,0,-1,1,-1,1,0,-1};
 
-	while(foo){
+	while(oVec.size() > 0){
 		/////////////////// this finds node with lowest fScore and makes current
 		float min = INFINITY;
 		int mindex = -1;
@@ -480,27 +579,24 @@ float Costmap::aStarDist(Point sLoc, Point gLoc){
 			}
 		}
 
+		if(mindex < 0){
+			//cerr << "Costmap::aStarDist::out dirty" << endl;
+			return INFINITY;
+		}
+
 		Point cLoc = oVec[mindex];
 		oVec.erase(oVec.begin() + mindex);
 		oSet.at<short>(cLoc) = 0;
 		cSet.at<short>(cLoc) = 1;
 
-		//cout << "*** sLoc/cLoc/gLoc: " << sLoc << " / "<< cLoc << " / "<< gLoc << endl;
-
 		/////////////////////// end finding current node
 		if(pointCompare(cLoc, gLoc) ){ // if the current node equals goal, construct path
-			cerr << "out of aStarDist" << endl;
+			//cerr << "Costmap::aStarDist::out clean" << endl;
 			return gScore.at<float>(cLoc);
 		} ///////////////////////////////// end construct path
 
-		// for nbrs
-		int nx[8] = {-1,-1,-1,0,0,1,1,1};
-		int ny[8] = {1,0,-1,1,-1,1,0,-1};
-
-		for(int ni = 0; ni<8; ni++){
-			Point nbr;
-			nbr.x += cLoc.x + nx[ni];
-			nbr.y += cLoc.y + ny[ni];
+		for(int ni = 0; ni<9; ni++){
+			Point nbr(cLoc.x + nx[ni], cLoc.y + ny[ni]);
 			if(pointOnMat(nbr, cells) ){
 				if(cSet.at<short>(nbr) == 1){ // has it already been eval? in cSet
 					continue;
@@ -515,7 +611,7 @@ float Costmap::aStarDist(Point sLoc, Point gLoc){
 				}
 
 				gScore.at<float>(nbr) = ngScore;
-				if(cells.at<short>(nbr) < 102){
+				if(cells.at<short>(nbr) < obsWall){
 					fScore.at<float>(nbr) = gScore.at<float>(nbr) + sqrt(pow(nbr.x-gLoc.x,2) + pow(nbr.y-gLoc.y,2));// +getEuclidianDistance(gLoc,nbr)
 				}
 				else{
@@ -523,24 +619,27 @@ float Costmap::aStarDist(Point sLoc, Point gLoc){
 				}
 			}
 		}
-		/////////////// end condition for while loop, check if oSet is empty
-		if(oVec.size() == 0){
-			foo = false;
-		}
 	}
-
+	//cerr << "Costmap::aStarDist::out dirty" << endl;
 	return INFINITY;
 }
 
 
-float Costmap::cumulativeAStarDist(Point sLoc, Point gLoc, Mat &cSet, vector<Point> &oSet, Mat &fScore, Mat &gScore){
+float Costmap::cumulativeAStarDist(Point sLoc, Point gLoc, Mat &cSet, Mat &oSet, vector<Point> &oVec, Mat &fScore, Mat &gScore){
 
 	if(cSet.empty() == 1){
 		cSet = Mat::zeros(cells.size(), CV_16SC1);
+		oSet = Mat::zeros(cells.size(), CV_16SC1);
+		oSet.at<short>(sLoc) = 1;
 
-		fScore = Mat::zeros(cells.size(), CV_32F);
-		gScore = Mat::zeros(cSet.size(), CV_32F);
-		oSet.push_back(sLoc);
+		gScore = Mat::ones(cells.size(), CV_32FC1)*INFINITY;
+		gScore.at<float>(sLoc) = 0;
+		fScore = Mat::ones(cells.size(), CV_32FC1)*INFINITY;
+		fScore.at<float>(sLoc) = sqrt(pow(sLoc.x-gLoc.x,2) + pow(sLoc.y-gLoc.y,2));
+		fScore.at<float>(gLoc) = 1;
+
+		oVec.clear();
+		oVec.push_back(sLoc);
 	}
 	else if(cSet.at<short>(gLoc) == 255){
 		return gScore.at<float>(gLoc);
@@ -557,80 +656,150 @@ float Costmap::cumulativeAStarDist(Point sLoc, Point gLoc, Mat &cSet, vector<Poi
 	}
 	fScore.at<float>(sLoc) = getEuclidianDistance(gLoc,sLoc);
 
-	while(oSet.size()){
+	while(oVec.size() > 0){
 		/////////////////// this finds node with lowest fScore and makes current
-		float minF = INFINITY;
-		int cIndex = -1;
-		for(size_t i=0; i<oSet.size(); i++){
-			if(fScore.at<float>(oSet[i]) < minF){
-				minF = fScore.at<float>(oSet[i]);
-				cIndex = i;
+		float min = INFINITY;
+		int mindex = -1;
+
+		for(size_t i=0; i<oVec.size(); i++){
+			if(fScore.at<float>(oVec[i]) < min){
+				min = fScore.at<float>(oVec[i]);
+				mindex = i;
 			}
 		}
 
-		Point cLoc = oSet[cIndex];
-		float cGScore = gScore.at<float>(oSet[cIndex]);
-		float cFScore = minF;
+		if(mindex < 0){
+			//cerr << "Costmap::aStarDist::out dirty" << endl;
+			return INFINITY;
+		}
 
-		cSet.at<short>(cLoc) = 255;
-		oSet.erase(oSet.begin() + cIndex);
+		Point cLoc = oVec[mindex];
+		oVec.erase(oVec.begin() + mindex);
+		oSet.at<short>(cLoc) = 0;
+		cSet.at<short>(cLoc) = 1;
 
-		/*
-		cMat.at<short>(gLoc[0], gLoc[1]) = 127;
-		namedWindow("A star", WINDOW_NORMAL);
-		imshow("A star", cMat);
-		waitKey(1);
-		*/
 		/////////////////////// end finding current node
 		if(pointCompare(cLoc, gLoc) ){ // if the current node equals goal, construct path
-			return cFScore;
+			//cerr << "Costmap::aStarDist::out clean" << endl;
+			return gScore.at<float>(cLoc);
 		} ///////////////////////////////// end construct path
 
-		for(int nbr = 0; nbr<8; nbr++){
+		// for nbrs
+		int nx[8] = {-1,-1,-1,0,0,1,1,1};
+		int ny[8] = {1,0,-1,1,-1,1,0,-1};
 
-			Point nbrLoc(cLoc.x + nx[nbr], cLoc.y + ny[nbr]);
-
-			if(nbrLoc.x >= 0 && nbrLoc.x < cells.cols && nbrLoc.y >= 0 && nbrLoc.y < cells.rows){
-				bool cFlag = true;
-
-				if(cSet.at<short>(nbrLoc) == 255){ // has it already been eval? in cSet
-					cFlag = false;
+		for(int ni = 0; ni<9; ni++){
+			Point nbr(cLoc.x + nx[ni], cLoc.y + ny[ni]);
+			if(pointOnMat(nbr, cells) ){
+				if(cSet.at<short>(nbr) == 1){ // has it already been eval? in cSet
+					continue;
+				}
+				float ngScore = gScore.at<float>(cLoc) + sqrt(pow(cLoc.x-nbr.x,2) + pow(cLoc.y-nbr.y,2));//getEuclidianDistance(cLoc, nbr); // calc temporary gscore, estimate of total cost
+				if(oSet.at<short>(nbr) == 0){
+					oSet.at<short>(nbr) = 1;  // add nbr to open set
+					oVec.push_back(nbr);
+				}
+				else if(ngScore >= gScore.at<float>(nbr) ){ // is temp gscore worse than stored g score of nbr
+					continue;
 				}
 
-				if(cFlag){
-					if(this->cells.at<short>(nbrLoc) <= unknown){
-						float tGScore = cGScore + getEuclidianDistance(nbrLoc, cLoc); // calc temporary gscore
-						cFlag = true;
-						for(size_t i=0; i<oSet.size(); i++){
-							if(oSet[i] == nbrLoc){
-								cFlag = false; // already in oSet, update score if found cheaper
-								if(tGScore < gScore.at<float>(oSet[i]) ){
-									gScore.at<float>(oSet[i]) = tGScore;
-									fScore.at<float>(oSet[i]) = tGScore + getEuclidianDistance(gLoc,nbrLoc);
-								}
-								break;
-							}
-						}
-
-						if(cFlag){ // not in oSet, so add
-							oSet.push_back(nbrLoc);  // add nbr to open set
-							gScore.at<float>(nbrLoc) = tGScore;
-							fScore.at<float>(nbrLoc) = tGScore + getEuclidianDistance(gLoc,nbrLoc);
-						}
-					}
-					else{
-						cSet.at<short>(nbrLoc) = 255;
-					}
+				gScore.at<float>(nbr) = ngScore;
+				if(cells.at<short>(nbr) < obsWall){
+					fScore.at<float>(nbr) = gScore.at<float>(nbr) + sqrt(pow(nbr.x-gLoc.x,2) + pow(nbr.y-gLoc.y,2));// +getEuclidianDistance(gLoc,nbr)
+				}
+				else{
+					fScore.at<float>(nbr)= INFINITY;
 				}
 			}
 		}
 	}
-
+	//cerr << "Costmap::aStarDist::out dirty" << endl;
 	return INFINITY;
 }
 
 /*
 
+void Costmap::shareCostmap(Costmap &A, Costmap &B){
+	for(int i=0; i<A.cells.cols; i++){
+		for(int j=0; j<A.cells.rows; j++){
+			Point a(i,j);
+
+			// share cells
+
+			if(A.cells.at<short>(a) != B.cells.at<short>(a) ){ // do we think the same thing?
+				if(A.cells.at<short>(a) == A.unknown){
+					A.cells.at<short>(a) = B.cells.at<short>(a); // if A doesn't know, anything is better
+				}
+				else if(A.cells.at<short>(a) == A.infFree || A.cells.at<short>(a) == A.infWall){ // A think its inferred
+					if(B.cells.at<short>(a) == B.obsFree || B.cells.at<short>(a) == B.obsWall){ // B has observed
+						A.cells.at<short>(a) = B.cells.at<short>(a);
+					}
+				}
+				else if(B.cells.at<short>(a) == B.unknown){ // B doesn't know
+					B.cells.at<short>(a) = A.cells.at<short>(a); // B doesn't know, anything is better
+				}
+				else if(B.cells.at<short>(a) == B.infFree || B.cells.at<short>(a) == B.infWall){ // B think its inferred
+					if(A.cells.at<short>(a) == A.obsFree || A.cells.at<short>(a) == A.obsWall){ // A has observed
+						B.cells.at<short>(a) = A.cells.at<short>(a);
+					}
+				}
+			}
+
+
+			if(A.cells.at<short>(a) != B.cells.at<short>(a) ){ // do we think the same thing?
+
+				if(A.cells.at<short>(a) != A.obsFree && A.cells.at<short>(a) != A.obsWall){ // if A hasn't observed anything
+					if(B.cells.at<short>(a) == B.obsFree || B.cells.at<short>(a) == B.obsWall){ // B has observed
+						A.cells.at<short>(a) = B.cells.at<short>(a); // update A
+					}
+				}
+
+				if(B.cells.at<short>(a) != B.obsFree && B.cells.at<short>(a) != B.obsWall){ // if B hasn't observed anything
+					if(A.cells.at<short>(a) == A.obsFree || A.cells.at<short>(a) == A.obsWall){ // A has observed
+						B.cells.at<short>(a) = A.cells.at<short>(a); // update B
+					}
+				}
+			}
+
+
+			// share search
+
+			if(A.searchReward.at<float>(a) < B.searchReward.at<float>(a) ){ // do we think the same thing?
+				B.searchReward.at<float>(a) = A.searchReward.at<float>(a);
+			}
+			else if(A.searchReward.at<float>(a) > B.searchReward.at<float>(a)){
+				A.searchReward.at<float>(a) = B.searchReward.at<float>(a);
+			}
+
+			// share occ
+
+			float minA = INFINITY;
+			float minB = INFINITY;
+
+			if(1-A.occ.at<float>(a) > A.occ.at<float>(a) ){
+				minA = 1-A.occ.at<float>(a);
+			}
+			else{
+				minA = A.occ.at<float>(a);
+			}
+
+			if(1-B.occ.at<float>(a) > B.occ.at<float>(a) ){
+				minB = 1-B.occ.at<float>(a);
+			}
+			else{
+				minB = B.occ.at<float>(a);
+			}
+
+			if( minA < minB ){ // do we think the same thing?
+				B.occ.at<float>(a) = A.occ.at<float>(a);
+			}
+			else{
+				A.occ.at<float>(a) = B.occ.at<float>(a);
+			}
+
+		}
+	}
+}
 
 float Costmap::getPercentObserved(Costmap &globalCostmap, Costmap &workingCostmap){
 

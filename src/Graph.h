@@ -34,9 +34,12 @@ public:
 
 	int cNode; // my location
 	vector<Point> nodeLocations;
+	vector<bool> nullView;
 	vector<vector<float> > nodeTransitions;
 	vector<Mat> nodeObservations;
 	vector<int> nodeSubGraphIndices;
+
+	Mat nullObservationNodes;
 
 	vector<int> cPath;
 
@@ -45,6 +48,9 @@ public:
 	void createThinGraph(Costmap &costmap, int nodeSpacing, int nbrSpacing);
 	void updateThinGraph(Costmap &costmap, int nodeSpacing, int nbrSpacing);
 	Mat thinMat;
+	Mat priorMat;
+	void pruneThinMat( Costmap &costmap );
+	void downSample( Mat &oMat, Mat &nMat, Costmap &costmap);
 
 	void createPRMGraph(Point cLoc, Costmap &costmap, int nodeSpacing, int nbrSpacing);
 	void thinning(const Mat& src, Mat& dst);

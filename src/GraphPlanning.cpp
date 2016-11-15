@@ -175,6 +175,7 @@ Point GraphPlanning::TSPPosePathPlanning(Costmap &costmap){
 	return poseGraph.nodeLocations[ tspPosePath[1] ];
 }
 
+/*
 float GraphPlanning::getGraphObservations(Graph &graph, Costmap &costmap, Mat &gView, vector<int> &workingSet){
 	graph.nodeObservations.clear();
 	for(size_t i=0; i<graph.nodeLocations.size(); i++){
@@ -187,27 +188,33 @@ float GraphPlanning::getGraphObservations(Graph &graph, Costmap &costmap, Mat &g
 	}
 	return observedReward(gView, costmap.reward);
 }
+*/
 
-void GraphPlanning::getViews(Costmap &costmap, vector<int> cPoses, Mat &cView, float &cReward, vector<Point> &poses, vector<Mat> &views, vector<float> poseRewards, float &gReward){
+void GraphPlanning::getViews(Costmap &costmap, vector<int> cPoses, Mat &cView, float &cReward, vector<Point> &poses, vector<Mat> &views, vector<float> &poseRewards, float &gReward){
 
 	Mat gView = Mat::zeros(costmap.cells.size(), CV_8UC1);
 
-	cerr << "cPoses: ";
+	//cout << "cPoses: ";
 	for(size_t i=0; i<cPoses.size(); i++){
 		Mat t = Mat::zeros(costmap.cells.size(), CV_8UC1);
 		simulateObservation(poses[ cPoses[i] ], t, costmap);
-		cerr << poses[ cPoses[i] ] << ", ";
+		//cout << poses[ cPoses[i] ] << ", ";
 		bitwise_or(cView, t, cView);
 	}
-	cerr << endl;
+	//cout << endl;
 	cReward = observedReward(cView, costmap.reward);
 
 	for(size_t i=0; i<poses.size(); i++){
-		Mat t = Mat::zeros(costmap.cells.size(), CV_8UC1);
-		simulateObservation(poses[i], t, costmap);
-		views.push_back(t);
-		poseRewards.push_back(observedReward( t, costmap.reward ) );
-		bitwise_or(gView, t, gView);
+		Mat tView = Mat::zeros(costmap.cells.size(), CV_8UC1);
+		if(poseRewards[i] == 0){
+			simulateObservation(poses[i], tView, costmap);
+			views.push_back(tView);
+			poseRewards[i] = observedReward( tView, costmap.reward );
+			bitwise_or(gView, tView, gView);
+		}
+		else{
+			views.push_back(tView);
+		}
 	}
 	gReward = observedReward(gView, costmap.reward);
 
@@ -339,10 +346,33 @@ vector<int> GraphPlanning::getWorkingSet(Costmap &costmap){
 	return workingSet;
 }
 
+void GraphPlanning::findNullPosesFromGraph( vector<Point> &poses, vector<float> poseRewards, Graph &graph){
+
+	// check all nodes, and see if they have zero reward, if the have zero reward now it will always have zero rewards
+	for(size_t i=0; i<poseRewards.size(); i++){
+		if(poseRewards[i] <= 0){
+			graph.nullObservationNodes.at<uchar>(poses[i]) = 255;
+		}
+	}
+}
+
+void GraphPlanning::markNullPosesInGraph( vector<Point> &poses, vector<float> &poseRewards, Graph &graph ){
+
+	if(graph.nullObservationNodes.empty() ){
+		graph.nullObservationNodes = Mat::zeros(graph.thinMat.size(), CV_8UC1);
+	}
+
+	// check all nodes, if a null node set reward to -1 as flag not to simulate view
+	for(size_t i=0; i<poses.size(); i++){
+		if(graph.nullObservationNodes.at<uchar>(poses[i]) >=  127){
+			poseRewards[i] = -1;
+		}
+	}
+}
 
 void GraphPlanning::findPosesEvolution(Costmap &costmap){
 
-	cerr << "GraphPlanning::findPosesEvolution::A" << endl;
+	cout << "GraphPlanning::findPosesEvolution::A" << endl;
 
 	// get graph observations and global reward
 	vector<int> oPoses, cPoses, bPoses;
@@ -350,40 +380,64 @@ void GraphPlanning::findPosesEvolution(Costmap &costmap){
 	vector<Mat> poseViews;
 	vector<float> poseRewards;
 
-	// add new nodes
-	for(size_t i=0; i<thinGraph.nodeLocations.size(); i++){
-		oPoses.push_back(i);
-		poseLocations.push_back( thinGraph.nodeLocations[i] );
-	}
-
-	// add old nodes
-	cerr << "PoseGraph: ";
-	for(size_t i=0; i<poseGraph.nodeLocations.size(); i++){
-		cPoses.push_back( oPoses.size() + i );
-		poseLocations.push_back( poseGraph.nodeLocations[i] );
-		cerr << poseGraph.nodeLocations[i] << ", ";
-	}
-	cerr << endl;
-
-	// for determing the num optimization iterations
-	int cInit = cPoses.size();
-
-	float cReward, gReward;
+	// add old nodes and get view
 	Mat cView = Mat::zeros(costmap.cells.size(), CV_8UC1);
-	getViews(costmap, cPoses, cView, cReward, poseLocations, poseViews, poseRewards, gReward);
-	plotPoses( costmap, cPoses, oPoses, poseViews , poseLocations);
+	for(size_t i=0; i<poseGraph.nodeLocations.size(); i++){
+		poseLocations.push_back( poseGraph.nodeLocations[i] );
+		Mat tView = Mat::zeros(costmap.cells.size(), CV_8UC1);
+		simulateObservation(poseGraph.nodeLocations[i], tView, costmap);
+		poseViews.push_back(tView);
+		float tReward = observedReward( tView, costmap.reward );
+		poseRewards.push_back( tReward );
+		if( tReward > 0 ){
+			cPoses.push_back(i);
+			bitwise_or(cView, tView, cView);
+		}
+	}
+	float cReward = observedReward( cView, costmap.reward );
+	Mat gView = Mat::ones(costmap.cells.size(), CV_8UC1)*255;
+	float gReward = observedReward( gView, costmap.reward );
 
-	cerr << "GraphPlanning::findPosesEvolution::C::cReward / gReward: " << cReward << " / " << gReward << endl;
+	// add potential new nodes
+	for(size_t i=0; i<thinGraph.nodeLocations.size(); i++){
+		oPoses.push_back( cPoses.size() + i );
+		poseLocations.push_back( thinGraph.nodeLocations[i] );
+		poseRewards.push_back(-1);
+		Mat tView = Mat::zeros(costmap.cells.size(), CV_8UC1);
+		poseViews.push_back(tView);
+	}
+
+	// any poses with 0 reward removed from cPoses
+	for(size_t i=0; i<cPoses.size(); i++){
+		int t = cPoses[i];
+		if( poseRewards[ t ] <= 0){
+			cPoses.erase(cPoses.begin() + i);
+			oPoses.push_back( t );
+		}
+	}
+
+	cout << "GraphPlanning::findPosesEvolution::C::cReward / gReward: " << cReward << " / " << gReward << endl;
+
 
 	// add more nodes to pose graph if not fully observing world
-	while(cReward < gReward){ // add states that increase the observed are until % is observed
+
+	clock_t tStart1 = clock();
+	int iter = 0;
+	while(cReward < gReward && iter < 500){ // add states that increase the observed are until % is observed
+		iter++;
 		int c = rand() % oPoses.size();
+		int index = oPoses[c];
+		if(poseRewards[index] == -1){
+			simulateObservation(poseLocations[index], poseViews[index], costmap);
+			poseRewards[index] = observedReward( poseViews[index], costmap.reward );
+		}
+
 		Mat tView;
-		bitwise_or(cView, poseViews[ oPoses[c] ], tView);
+		bitwise_or(cView, poseViews[ index ], tView);
 		float tReward = observedReward(tView, costmap.reward);
 
 		if(tReward > cReward){
-			cPoses.push_back( oPoses[c] );
+			cPoses.push_back( index );
 
 			cView = tView;
 			cReward = tReward;
@@ -391,74 +445,31 @@ void GraphPlanning::findPosesEvolution(Costmap &costmap){
 			oPoses.erase(oPoses.begin() + c);
 		}
 	}
+	printf("Time taken to create get poses: %.2fs\n", (double)(clock() - tStart1)/CLOCKS_PER_SEC);
 
-	cerr << "GraphPlanning::findPosesEvolution::D::cReward / gReward: " << cReward << " / " << gReward << endl;
-
+	//cerr << "GraphPlanning::findPosesEvolution::D::cReward / gReward: " << cReward << " / " << gReward << endl;
 	int cPost = cPoses.size();
+	iter = 0;
+	while( iter < cPost ){
+		int dP = cPoses[iter];
 
-	plotPoses( costmap, cPoses, oPoses, poseViews , poseLocations);
-	waitKey(1);
-
-
-	if( cPoses.size() + oPoses.size() > 2){
-		vector<int> op, cp;
-
-		for(int i=0; i<10*cPost; i++){
-
-			op.clear();
-			for(size_t i=0; i<oPoses.size(); i++){
-				op.push_back(oPoses[i]);
-			}
-
-			cp.clear();
-			for(size_t i=0; i<cPoses.size(); i++){
-				cp.push_back(cPoses[i]);
-			}
-
-			if(cp.size() == 0){
-				cerr << "GraphPlanning::findPosesEvolution::Error: no poses in closed set" << endl;
-				waitKey(0);
-			}
-
-			int choose = 1;//rand() % 2;
-
-			if( choose == 0 && op.size() > 0){ // swap a state with open set
-				int oni = rand() % op.size();
-				int cni = rand() % cp.size();
-				int swpOut = cp[cni];
-
-				cp[cni] = op[oni];
-				op[oni] = swpOut;
-			}
-			else{ // erase a state
-				int cni = rand() % cp.size();
-				op.push_back(cp[cni]);
-				cp.erase(cp.begin()+cni);
-			}
-
-			Mat cView = Mat::zeros(costmap.cells.size(), CV_8UC1);
-			for(size_t i=1; i<cp.size(); i++){
-				bitwise_or(cView, poseViews[ cp[i] ], cView);
-			}
-			float cr = observedReward(cView, costmap.reward );
-
-			if(cr == gReward && cp.size() < cPoses.size()){
-				cReward = cr;
-
-				cPoses.clear();
-				for(size_t i=0; i<cp.size(); i++){
-					cPoses.push_back(cp[i]);
-				}
-
-				oPoses.clear();
-				for(size_t i=0; i<op.size(); i++){
-					oPoses.push_back(op[i]);
-				}
+		Mat dMat = Mat::zeros(costmap.cells.size(), CV_8UC1);
+		for(size_t i=0; i<cPoses.size(); i++){
+			if( int(i) != iter ){
+				bitwise_or(dMat, poseViews[i], dMat);
 			}
 		}
-	}
 
-	cerr << "GraphPlanning::findPosesEvolution::D+" << endl;
+		float dReward = observedReward( dMat, costmap.reward );
+
+		if( dReward == gReward ){
+			cPoses.erase(cPoses.begin() + iter);
+			oPoses.push_back( dP );
+			cPost--;
+			cerr << "erased dP" << endl;
+		}
+		iter++;
+	}
 
 	plotPoses( costmap, cPoses, oPoses, poseViews , poseLocations);
 	waitKey(1);
@@ -469,13 +480,6 @@ void GraphPlanning::findPosesEvolution(Costmap &costmap){
 		poseGraph.nodeLocations.push_back( poseLocations[ cPoses[i] ] );
 		poseGraph.nodeObservations.push_back( poseViews[ cPoses[i] ] );
 	}
-
-	cerr << "PoseGraph: ";
-	for(size_t i=0; i<poseGraph.nodeLocations.size(); i++){
-		cerr << poseGraph.nodeLocations[i] << ", ";
-	}
-	cerr << endl;
-	waitKey(1);
 
 	cerr << "GraphPlanning::findPosesEvolution::E" << endl;
 }
