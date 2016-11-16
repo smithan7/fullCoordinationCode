@@ -379,7 +379,7 @@ bool Agent::checkReturnTime(){
 
 		float dR;
 		if(relayFlag){
-			dR = getDistanceToReportToOperatorFromRelayPt() + getDistanceToReturnToRelayPt();
+			dR = getDistanceToReturnToOperatorFromRelayPt() + getDistanceToReturnToRelayPt();
 		}
 		else if( sacrificeFlag ){
 			dR = getDistanceToReportToRelayPt();
@@ -424,18 +424,21 @@ void Agent::infer( string inferenceMethod,  World &world ){
 
 void Agent::plan( string planMethod ){
 
-
 	// all agents check if they should return, includes relay / sacrifice / normal
 	if( checkReturnTime() || checkForExplorationFinished() ){
 		if(relayFlag){
+			cerr << this->myIndex << " relay action " << endl;
 			gLoc = returnToRelayPt();
 			return;
 		}
 		else if( sacrificeFlag ){
+			cerr << this->myIndex << " sacrifice action " << endl;
 			gLoc = reportToRelayPt();
+
 			return;
 		}
 		else{
+			cerr << this->myIndex << " return action " << endl;
 			gLoc = returnToOperator();
 			return;
 		}
@@ -446,40 +449,65 @@ void Agent::plan( string planMethod ){
 		gLoc = reportToOperator();
 		return;
 	}
-
 	planExplore(planMethod);
 }
 
 void Agent::marketRelaySacrifice(Agent &a){
 
-	if( !this->sacrificeFlag ){ // I'm not a sacrifice
-		if( !a.sacrificeFlag || !a.relayFlag ){ // and they're not already a relay or sacrifice
+	if(this->returnFlag && this->relayFlag ){ // is it time to return and I'm a relay or sacrifice?
 
-			if( this->relayFlag ){ // I'm a relay
-				a.sacrificeFlag = true;
-				a.rLoc = this->rLoc;
-				this->sacrificeList.push_back( a.myIndex );
+		if(this->relayFlag){ // if I'm a relay
+			// is a on my sacrifice list?, if yes, remove them
+			if(this->myIndex == a.myRelay && a.batteryLeft <= 0){
+				for(size_t i=0; i<this->sacrificeList.size(); i++){
+					if(a.myIndex == this->sacrificeList[i]){
+						this->sacrificeList.erase(this->sacrificeList.begin() + i);
+						break;
+					}
+				}
 			}
-			else if( this->myIndex > a.myIndex ){
-				this->relayFlag = true;
+
+			// is my sacrifice list empty? if yes clear my relay flag
+			if(this->sacrificeList.size() == 0){
+				this->relayFlag = false;
+			}
+
+		}
+	}
+	else if( !this->sacrificeFlag && !this->relayFlag && this->lastReport() ){ // I'm not a sacrifice or relay already
+		if( !a.sacrificeFlag && !a.relayFlag && this->lastReport() ){ // and they're not already a relay or sacrifice
+
+			if( this->myIndex > a.myIndex ){
+				this->relayFlag = true; // I'll be a relay, they'll be a sacrifice
 				a.sacrificeFlag = true;
+
 				this->rLoc = a.cLoc; // rLoc is sacrifices location to extend range
 				a.rLoc = a.cLoc;
 				this->sacrificeList.push_back( a.myIndex );
+				a.myRelay = this->myIndex;
 			}
 			else{
-				a.relayFlag = true;
+				a.relayFlag = true; // they'll be a relay, I'll be a sacrifice
 				this->sacrificeFlag = true;
+
 				a.rLoc = this->cLoc; // rLoc is sacrifices location to extend range
 				this->rLoc = this->cLoc;
+
 				a.sacrificeList.push_back( this->myIndex );
+				this->myRelay = a.myIndex;
 			}
 		}
-		else if( a.relayFlag && a.myIndex == this->myRelay ){ // theyre my relay, update rLoc
-
+	}
+	else if( this->sacrificeFlag ){ // I'm a sacrifice, update rLoc
+		if( a.relayFlag && a.myIndex == this->myRelay ){ // theyre my relay, update rLoc
 			a.rLoc = this->cLoc; // rLoc is sacrifices location to extend range
 			this->rLoc = this->cLoc;
-
+		}
+	}
+	else if( this->relayFlag ){ // I'm a relay, update rLoc
+		if( a.sacrificeFlag && this->myIndex == a.myRelay ){ // theyre my relay, update rLoc
+			this->rLoc = a.cLoc; // rLoc is sacrifices location to extend range
+			a.rLoc = a.cLoc;
 		}
 	}
 }
@@ -586,7 +614,7 @@ void Agent::planExplore(string planMethod ){
 		cout << "out" << endl;
 		cout << "Agent::act::found graphPoses with " << this->graphCoordination.poseGraph.nodeLocations.size() << " nodes" << endl;
 
-		//this->inference.makeVisualInference(costmap, graphCoordination.thinGraph);
+		this->inference.makeVisualInference(costmap, graphCoordination.thinGraph);
 
 		if(graphCoordination.poseGraph.nodeLocations.size() < 1){
 			cout << "PoseGraph.size() == 0" << endl;
@@ -630,24 +658,34 @@ void Agent::planExplore(string planMethod ){
 
 void Agent::act(){
 
-	if(cLoc == gLoc){
-		while(true){
-			Point g;
-			g.x = gLoc.x + rand() % 5 - 2;
-			g.y = gLoc.y + rand() % 5 - 2;
+	if(cLoc == rLoc && returnFlag && relayFlag){ // if I'm a relay and it's time to relay, land at rLoc and wait
+		batteryLeft++;
+	}
+	else if(batteryLeft > 0){
+		if(cLoc == gLoc){
+			while(true){
+				Point g;
+				g.x = gLoc.x + rand() % 5 - 2;
+				g.y = gLoc.y + rand() % 5 - 2;
 
-			if(costmap.cells.at<short>(g) == costmap.obsFree){
-				gLoc = g;
-				break;
+				if(costmap.cells.at<short>(g) == costmap.obsFree){
+					gLoc = g;
+					break;
+				}
 			}
 		}
+
+		myPath = costmap.aStarPath(cLoc, gLoc);
+		cLoc = myPath[1];
+		myPath.erase(myPath.begin());
 	}
 
-	myPath = costmap.aStarPath(cLoc, gLoc);
-	cLoc = myPath[1];
-	myPath.erase(myPath.begin());
-	cout << "Agent::act::cLoc / gLoc / reportCntr / batteryLeft / returnTime: " << cLoc << " / " << gLoc << " / " << reportCntr << " / " << batteryLeft << " / " << returnTime << endl;
-	cout << "Agent::act:: reportFlag / returnFlag = " << reportFlag << " / " << returnFlag << endl;
+	cout << "Agent[" << myIndex << "]::act::cLoc / gLoc / reportCntr / batteryLeft / returnTime: " << cLoc << " / " << gLoc << " / " << reportCntr << " / " << batteryLeft << " / " << returnTime << endl;
+	cout << "Agent[" << myIndex << "]::act::reportFlag / returnFlag: " << reportFlag << " / " << returnFlag << endl;
+	cout << "Agent[" << myIndex << "]::act::relayFlag / sacrificeFlag: " << relayFlag << " / " << sacrificeFlag << endl;
+	if( relayFlag || sacrificeFlag ){
+		cout << "Agent[" << myIndex << "]::act::rLoc / oLoc: " << rLoc << " / " << oLoc << endl;
+	}
 }
 
 void Agent::showCellsPlot(){

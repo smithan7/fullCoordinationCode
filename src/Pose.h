@@ -21,9 +21,9 @@ using namespace cv;
 
 class Pose {
 public:
-	Pose(Point loc, Costmap &costmap);
+	Pose(Point loc, Costmap &costmap, float radius, int nSamples);
 	virtual ~Pose();
-	void initPose(Costmap &costmap);
+	void initPose(Costmap &costmap, float radius, int nSamples);
 	void makeMat();
 	void addToMat(Mat &matIn);
 
@@ -31,6 +31,7 @@ public:
 	Mat mat;
 	vector<Point> obsLim;
 	vector<float> obsLen;
+	vector<int> obsVal;
 	bool needInference;
 
 };

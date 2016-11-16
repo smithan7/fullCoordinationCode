@@ -7,23 +7,21 @@
 
 #include "Pose.h"
 
-Pose::Pose(Point loc, Costmap &costmap) {
+Pose::Pose(Point loc, Costmap &costmap, float radius, int nSamples) {
 	this->loc = loc;
 	this->needInference = true;
 
-	initPose(costmap);
+	initPose(costmap, radius, nSamples);
 }
 
-void Pose::initPose(Costmap &costmap){
+void Pose::initPose(Costmap &costmap, float radius, int nSamples){
 
 	Mat ta = Mat::zeros(costmap.cells.size(), CV_8UC1);
 
 	Point p;
-	float sr = 20;
-	int nSamples = 300;
-	for(int i=0; i<nSamples; i++){
-		p.x = loc.x + round( sr*cos( 6.28318*i/nSamples) );
-		p.y = loc.y + round( sr*sin( 6.28318*i/nSamples) );
+	for(int ns=0; ns<nSamples; ns++){
+		p.x = loc.x + round( radius*cos( 6.28318*ns/nSamples) ); // end point I am aiming at
+		p.y = loc.y + round( radius*sin( 6.28318*ns/nSamples) );
 
 		LineIterator it(ta, loc, p, 4, false);
 		for(int i=0; i<it.count; i++, ++it){
@@ -31,12 +29,14 @@ void Pose::initPose(Costmap &costmap){
 			if(costmap.cells.at<short>(pp) > costmap.infFree){ // detect if a cell is infFree
 				this->obsLim.push_back( Point(pp.x-loc.x, pp.y-loc.y) ); // record position of end pt relative to center
 				this->obsLen.push_back( sqrt( pow(loc.x - pp.x,2) + pow(loc.y - pp.y,2)) ); // record lengths
-
-				if( isnan(obsLen.back()) ){
-					cerr << "isnan" << endl;
-				}
-
+				this->obsVal.push_back( costmap.cells.at<short>(pp));
 				break;
+			}
+
+			if(i+1 >= it.count){ // didn't hit a wall
+				this->obsLim.push_back( Point(p.x-loc.x, p.y-loc.y) ); // record position of end pt relative to center
+				this->obsLen.push_back( radius ); // record lengths
+				this->obsVal.push_back( costmap.cells.at<short>(pp));
 			}
 		}
 	}

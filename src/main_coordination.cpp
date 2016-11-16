@@ -43,19 +43,19 @@ int main(){
 	srand( time(NULL) );
 	bool videoFlag = false;
 
-	int numAgents = 3;
+	int numAgents = 2;
 	int numIterations = 1;
 
-	int gSpace = 5;
+	int gSpace = 2;
 	float obsThresh = 50;
 	float comThresh = 100;
-	int maxTime = 205;
-	int reportInterval = 50;
-	float batteryInit = 200;
+	int maxTime = 105;
+	int reportInterval = 100;
+	float batteryInit = 100;
 
 	vector<string> fName;
-	//fName.push_back("mineMap");
-	fName.push_back("gmapping");
+	fName.push_back("mineMap2");
+	//fName.push_back("gmapping");
 	//fName.push_back("tunnelTest");
 	//loadMapNames(fName);
 
@@ -70,9 +70,9 @@ int main(){
 
 	vector<string> inferenceMethod;
 	//inferenceMethod.push_back("naive");
-	inferenceMethod.push_back("geometric");
+	//inferenceMethod.push_back("geometric");
 	//inferenceMethod.push_back("structural");
-	//inferenceMethod.push_back("global");
+	inferenceMethod.push_back("global");
 
 	srand( time(NULL) );
 	// create world
@@ -161,7 +161,7 @@ int main(){
 						agents[i].reportFlag = false;
 					}
 					// all agents communicate with each other if possible
-					for(int j=i+1; j<numAgents; j++){
+					for(int j=0; j<numAgents; j++){
 						if(i!=j){
 							if(world.commoCheck(agents[i].cLoc, agents[j].cLoc, comThresh)){
 								agents[i].communicate( agents[j].costmap, agents[j].market );
