@@ -44,6 +44,47 @@ void Pose::initPose(Costmap &costmap, float radius, int nSamples){
 	// recenter loc to (0,0)
 	loc.x = 0;
 	loc.y = 0;
+
+	getMean();
+	getStanDev();
+}
+
+
+
+void Pose::getMean(){
+
+	float sum = 0;
+	float N = obsLen.size();
+	for(int i=0; i<N; i++){
+		sum += obsLen[i];
+	}
+
+	this->mean = sum / N;
+}
+
+void Pose::getStanDev(){
+
+	float sum = 0;
+	float N = obsLen.size();
+	for(int i=0; i<N; i++){
+		sum += pow(this->mean - obsLen[i],2);
+	}
+
+	this->stanDev = sqrt(sum / N);
+}
+
+float Pose::getPDF( float x ){
+    float pi = 3.14159265358979323846264338327950288419716939937510582;
+    return 1 / sqrt(2*pow(stanDev,2)*pi)*exp(-pow(x-mean,2)/(2*pow(stanDev,2)));
+}
+
+float Pose::getCDF( float x ){
+	// A Sigmoid Approximation of the Standard Normal Integral
+	// Gary R. Waissi and Donald F. Rossin
+
+    float z = (x- mean) / stanDev;
+    float pi = 3.14159265358979323846264338327950288419716939937510582;
+    return 1 / (1+exp(-sqrt(pi)*(-0.0004406*pow(z,5) + 0.0418198*pow(z,3) + 0.9*z) ) );
 }
 
 void Pose::makeMat(){

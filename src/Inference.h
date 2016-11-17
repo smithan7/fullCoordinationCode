@@ -49,7 +49,7 @@ public:
 	float calcVisualFit(Pose &po, Pose &pl, Costmap &costmap, int &iter);
 	// calculate the reward of two aligned scans
 	float visualReward(Costmap &costmap, float dist, Point &obsPt, Point &libPt);
-	float visualReward2(Pose &obs, Pose &lib, int obsI, int libI, float dist, Costmap &costmap);
+	float visualReward2(Pose &obs, Pose &lib, int obsI, int libI, Costmap &costmap);
 	void addToVisualLibrary(Pose &pose);
 	void testPoseAgainstLibrary(Pose &oPose);
 	void drawHistogram(vector<float> histogram, char* title);

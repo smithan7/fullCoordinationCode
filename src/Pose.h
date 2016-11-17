@@ -33,6 +33,13 @@ public:
 	vector<float> obsLen;
 	vector<int> obsVal;
 	bool needInference;
+	float mean;
+	float stanDev;
+
+	void getMean();
+	void getStanDev();
+	float getPDF( float x );
+	float getCDF( float x );
 
 };
 

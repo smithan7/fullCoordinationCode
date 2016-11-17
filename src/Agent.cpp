@@ -427,28 +427,27 @@ void Agent::plan( string planMethod ){
 	// all agents check if they should return, includes relay / sacrifice / normal
 	if( checkReturnTime() || checkForExplorationFinished() ){
 		if(relayFlag){
-			cerr << this->myIndex << " relay action " << endl;
 			gLoc = returnToRelayPt();
 			return;
 		}
 		else if( sacrificeFlag ){
-			cerr << this->myIndex << " sacrifice action " << endl;
 			gLoc = reportToRelayPt();
 
 			return;
 		}
 		else{
-			cerr << this->myIndex << " return action " << endl;
 			gLoc = returnToOperator();
 			return;
 		}
 	}
 
 	// all agents check if they should report
-	if( checkReportTime() ){
+	if( checkReportTime() && !lastReport()){
 		gLoc = reportToOperator();
 		return;
 	}
+
+	// don't return or report, so explore
 	planExplore(planMethod);
 }
 
@@ -475,7 +474,7 @@ void Agent::marketRelaySacrifice(Agent &a){
 		}
 	}
 	else if( !this->sacrificeFlag && !this->relayFlag && this->lastReport() ){ // I'm not a sacrifice or relay already
-		if( !a.sacrificeFlag && !a.relayFlag && this->lastReport() ){ // and they're not already a relay or sacrifice
+		if( !a.sacrificeFlag && !a.relayFlag && a.lastReport() && !a.returnFlag){ // and they're not already a relay or sacrifice
 
 			if( this->myIndex > a.myIndex ){
 				this->relayFlag = true; // I'll be a relay, they'll be a sacrifice
@@ -498,13 +497,13 @@ void Agent::marketRelaySacrifice(Agent &a){
 			}
 		}
 	}
-	else if( this->sacrificeFlag ){ // I'm a sacrifice, update rLoc
+	else if( this->sacrificeFlag && !this->returnFlag && !a.returnFlag){ // I'm a sacrifice, update rLoc
 		if( a.relayFlag && a.myIndex == this->myRelay ){ // theyre my relay, update rLoc
 			a.rLoc = this->cLoc; // rLoc is sacrifices location to extend range
 			this->rLoc = this->cLoc;
 		}
 	}
-	else if( this->relayFlag ){ // I'm a relay, update rLoc
+	else if( this->relayFlag && !this->returnFlag && !a.returnFlag){ // I'm a relay, update rLoc
 		if( a.sacrificeFlag && this->myIndex == a.myRelay ){ // theyre my relay, update rLoc
 			this->rLoc = a.cLoc; // rLoc is sacrifices location to extend range
 			a.rLoc = a.cLoc;
@@ -614,7 +613,7 @@ void Agent::planExplore(string planMethod ){
 		cout << "out" << endl;
 		cout << "Agent::act::found graphPoses with " << this->graphCoordination.poseGraph.nodeLocations.size() << " nodes" << endl;
 
-		this->inference.makeVisualInference(costmap, graphCoordination.thinGraph);
+		//this->inference.makeVisualInference(costmap, graphCoordination.thinGraph);
 
 		if(graphCoordination.poseGraph.nodeLocations.size() < 1){
 			cout << "PoseGraph.size() == 0" << endl;

@@ -41,19 +41,20 @@ int main(){
 
 	vector<int> treePath;
 	srand( time(NULL) );
-	bool videoFlag = false;
+	bool videoFlag = true;
 
-	int numAgents = 2;
+	int numAgents = 3;
 	int numIterations = 1;
 
 	int gSpace = 2;
 	float obsThresh = 50;
 	float comThresh = 100;
-	int maxTime = 105;
+	int maxTime = 500;
 	int reportInterval = 100;
-	float batteryInit = 100;
+	float batteryInit = 500;
 
 	vector<string> fName;
+	//fName.push_back("mineMap");
 	fName.push_back("mineMap2");
 	//fName.push_back("gmapping");
 	//fName.push_back("tunnelTest");
@@ -70,9 +71,9 @@ int main(){
 
 	vector<string> inferenceMethod;
 	//inferenceMethod.push_back("naive");
-	//inferenceMethod.push_back("geometric");
+	inferenceMethod.push_back("geometric");
 	//inferenceMethod.push_back("structural");
-	inferenceMethod.push_back("global");
+	//inferenceMethod.push_back("global");
 
 	srand( time(NULL) );
 	// create world
@@ -112,14 +113,13 @@ int main(){
 			time_t start = clock();
 
 			// video writers
-			VideoWriter slamVideo;
+			VideoWriter operatorVideo, globalVideo;
 			if(videoFlag){
-				//Size frameSize( static_cast<int>(world.costmap.cells.cols, world.costmap.cells.rows) );
-				//slamVideo.open("multiAgentInference.avi",CV_FOURCC('M','J','P','G'), 30, frameSize, true );
+				Size frameSize = world.costmap.cells.size();
+				operatorVideo.open("multiAgentInferenceOperator.avi",CV_FOURCC('M','J','P','G'), 30, frameSize, true );
+				globalVideo.open("multiAgentInferenceGlobal.avi",CV_FOURCC('M','J','P','G'), 30, frameSize, true );
 				cout << "Main::Videos started" << endl;
 			}
-
-
 
 			int timeSteps = -1;
 			float percentObserved = 0;
@@ -199,7 +199,8 @@ int main(){
 
 				if(videoFlag){
 					for(int i =0; i<5; i++){ // slower frmae rate through repeated frames
-						slamVideo << humanObserver.costmap.displayPlot;
+						operatorVideo << humanObserver.costmap.displayPlot;
+						globalVideo << globalObserver.costmap.displayPlot;
 					}
 				}
 

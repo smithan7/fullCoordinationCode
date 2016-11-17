@@ -22,6 +22,7 @@ float absV( float num );
 void printVector( vector<float> vec, string name );
 
 Inference::Inference() {
+	/*
 	FileStorage fsR("/home/andy/git/fabmap2Test/InferenceLibrary/roomLibrary.yml", FileStorage::READ);
 	fsR["names"] >> roomNameList;
 	fsR["histogramList"] >> roomHistogramList;
@@ -39,7 +40,7 @@ Inference::Inference() {
 	fsB["centerList"] >> buildingCenterList;
 	fsB["meanLength"] >> buildingMeanLengthList;
 	fsB.release();
-
+	*/
 
 	minMatchStrength = 100;
 	wallInflationDistance = 2; // must be a wall within n cells to inflate
@@ -148,20 +149,22 @@ void Inference::makeVisualInference(Costmap &costmap, Graph &graph){
 
 void Inference::visualInferenceOnFreeSpace( Costmap &costmap, Graph &graph, Mat &visInfMat ){
 
-	float poseRadius = 50;
-	int poseSamples = 100;
+	float poseRadius = 40;
+	int poseSamples = 36;
 
-	while(1){
+	int poseIter = 0;
+	while(poseIter < 2){
+		poseIter++;
 		Mat graphR = Mat::zeros(visInfMat.size(), CV_8UC3);
 
 		// get views from nodes on travel graph
 		int ns = rand() % graph.nodeLocations.size();
 		Pose ps(graph.nodeLocations[ns], costmap, poseRadius, poseSamples);
 
-		ps.makeMat();
-		namedWindow("obs mat", WINDOW_NORMAL);
-		imshow("obs mat", ps.mat );
-		waitKey(1);
+		//ps.makeMat();
+		//namedWindow("obs mat", WINDOW_NORMAL);
+		//imshow("obs mat", ps.mat );
+		//waitKey(1);
 
 		Pose mp(graph.nodeLocations[ns], costmap, poseRadius, poseSamples);
 
@@ -183,27 +186,33 @@ void Inference::visualInferenceOnFreeSpace( Costmap &costmap, Graph &graph, Mat 
 					mr2 = rv.back();
 				}
 
-				cout << "r: " << rv.back() << endl;
 
-				drawHistogram( ps.obsLen, "observed");
-				drawHistogram( ts.obsLen, "library");
+				//cout << "r: " << rv.back() << endl;
 
-				ts.makeMat();
-				namedWindow("lib mat", WINDOW_NORMAL);
-				imshow("lib mat", ts.mat );
-				waitKey(1);
+				//drawHistogram( ps.obsLen, "observed");
+				//drawHistogram( ts.obsLen, "library");
 
-				mp.makeMat();
-				namedWindow("best mat", WINDOW_NORMAL);
-				imshow("best mat", mp.mat );
-				waitKey(1);
+				//ts.makeMat();
+				//namedWindow("lib mat", WINDOW_NORMAL);
+				//imshow("lib mat", ts.mat );
+				//waitKey(1);
+
 			}
 		}
 
+		//mp.makeMat();
+		//namedWindow("best mat", WINDOW_NORMAL);
+		//imshow("best mat", mp.mat );
+		//waitKey(1);
+
+		cout << "rv: ";
 		for(size_t i=0; i<rv.size(); i++){
-			Scalar rc( 255*(1-(rv[i] / mr2)), 255*(1-(rv[i] / mr2)), 255 );
+			cout << rv[i] << ", ";
+			//Scalar rc( 255*(1-(rv[i] / mr2)), 255*(1-(rv[i] / mr2)), 255 );
+			Scalar rc( 255*((rv[i] / mr2)), 255*((rv[i] / mr2)), 255 );
 			circle( graphR, graph.nodeLocations[i], 2, rc, -1, 8);
 		}
+		cout << endl;
 
 		circle( graphR, graph.nodeLocations[ns], 2, (255,255,255), -1, 8);
 
@@ -271,7 +280,7 @@ float Inference::calcVisualFit(Pose &po, Pose &pl, Costmap &costmap, int &maxIte
 			//Point lp = pl.obsLim[libIter]+po.loc;
 			//rew += visualReward(costmap, dist, op, lp);
 
-			rew += visualReward2( po, pl, j, libIter, dist, costmap);
+			rew -= log2( visualReward2( po, pl, j, libIter, costmap) );
 			libIter++;
 		}
 
@@ -288,8 +297,64 @@ float Inference::calcVisualFit(Pose &po, Pose &pl, Costmap &costmap, int &maxIte
 			//Point lp = pl.obsLim[libIter]+po.loc;
 			//rew += visualReward(costmap, dist, op, lp);
 
-			rew += visualReward2( po, pl, j, libIter, dist, costmap);
+			rew -= log2( visualReward2( po, pl, j, libIter, costmap) );
 			libIter++;
+		}
+
+		//printVector( distTracker, "distTracker" );
+
+		//drawHistogram( poIterTracker, "po tracker");
+		//drawHistogram( plIterTracker, "li tracker");
+		//drawHistogram( distTracker, "dist tracker");
+
+		//cout << "rew / maxRew: " << rew << " / " << maxRew << endl;
+		//waitKey(0);
+
+		if(rew < maxRew){
+			maxRew = rew;
+			maxIter = i;
+		}
+	}
+
+	for(size_t i=0; i<po.obsLen.size(); i++){
+		float rew = 0;
+		int libIter = pl.obsLen.size()-1;
+		float dist;
+
+		vector<float> poIterTracker, plIterTracker, distTracker;
+
+		for(size_t j=i; j<po.obsLen.size(); j++){
+			poIterTracker.push_back( po.obsLen[j] );
+			plIterTracker.push_back( pl.obsLen[libIter] );
+			distTracker.push_back( absV(po.obsLen[j] - pl.obsLen[libIter]) );
+			dist = po.obsLen[j] - pl.obsLen[libIter];
+			//cout << "j / po.obsLen.size(): " << j << " / " << po.obsLen.size() << endl;
+			//cout << "libIter / pl.obsLen.size(): " << libIter << " / " << pl.obsLen.size() << endl;
+			//cout << "dist: " << dist << " / " << po.obsLen[j] << " / " << pl.obsLen[libIter] << endl;
+
+			//Point op = po.obsLim[j]+po.loc;
+			//Point lp = pl.obsLim[libIter]+po.loc;
+			//rew += visualReward(costmap, dist, op, lp);
+
+			rew -= log( visualReward2( po, pl, j, libIter, costmap) );
+			libIter--;
+		}
+
+		for(size_t j=0; j<i; j++){
+			poIterTracker.push_back( po.obsLen[j] );
+			plIterTracker.push_back( pl.obsLen[libIter] );
+			distTracker.push_back( absV( po.obsLen[j] - pl.obsLen[libIter]) );
+			dist = po.obsLen[j] - pl.obsLen[libIter];
+			//cout << "j / po.obsLen.size(): " << j << " / " << po.obsLen.size() << endl;
+			//cout << "libIter / pl.obsLen.size(): " << libIter << " / " << pl.obsLen.size() << endl;
+			//cout << "dist: " << dist << " / " << po.obsLen[j] << " / " << pl.obsLen[libIter] << endl;
+
+			//Point op = po.obsLim[j]+po.loc;
+			//Point lp = pl.obsLim[libIter]+po.loc;
+			//rew += visualReward(costmap, dist, op, lp);
+
+			rew -= log( visualReward2( po, pl, j, libIter, costmap) );
+			libIter--;
 		}
 
 		//printVector( distTracker, "distTracker" );
@@ -330,27 +395,18 @@ void printVector( vector<float> vec, string name ){
 	cout << endl;
 }
 
-float Inference::visualReward2(Pose &obs, Pose &lib, int obsI, int libI, float dist, Costmap &costmap){
+float Inference::visualReward2(Pose &obs, Pose &lib, int obsI, int libI, Costmap &costmap){
 
-	float d2  = pow(dist,2);
+	float l1 = obs.obsLen[obsI] + ( lib.obsLen[libI] - obs.obsLen[obsI]);
+	float l2 = obs.obsLen[obsI] - ( lib.obsLen[libI] - obs.obsLen[obsI]);
 
-	return d2;//1/(1+d2);
-
-	if( dist <= 0 ){ // simulated point is between observer and library end pt
-		if(obs.obsVal[obsI] == costmap.obsWall){
-			return 1/(1+d2);
-		}
-		else{ // costmap.cells.at<short>(obsPt) == costmap.infWall
-			return 0.5/(1+d2) + 0.25;
-		}
+	if(obs.obsVal[obsI] == costmap.obsWall || obs.obsVal[obsI] == costmap.obsFree){
+		return 1 - abs( obs.getCDF( l1 ) - obs.getCDF( l2 ) );
+		//return 1 - abs( obs.getCDF( obs.obsLen[obsI] ) - obs.getCDF( lib.obsLen[libI] ) );
 	}
-	else{ // simulated point is outside observer and library end pt
-		if(lib.obsVal[libI] == costmap.obsFree){ // is the place the library has a wall observed to be free, if yes, larger error
-			return 1/(1+d2);
-		}
-		else{ // costmap.cells.at<short>(obsPt) == costmap.infFree // is place the library has a wall inferred to be free, if yes, smaller error than if observed
-			return 0.5/(1+d2) + 0.25;
-		}
+	else{ // costmap.cells.at<short>(obsPt) == costmap.infWall
+		return 0.5 + 0.5*(1-abs( obs.getCDF( l1 ) - obs.getCDF( l2 ) ) );
+		//return 0.5 + 0.5*(1-abs( obs.getCDF( obs.obsLen[obsI] ) - obs.getCDF( lib.obsLen[libI] ) ) );
 	}
 }
 
