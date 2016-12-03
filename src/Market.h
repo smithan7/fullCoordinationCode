@@ -27,20 +27,37 @@ public:
 	void init(int nAgents, int myIndex);
 	void shareMarket( Market &in );
 	void updateMarket( Point cLoc, Point gLoc );
+	void marketReturnInfo();
+	void marketRelaySacrifice();
+	bool comCheck(int a);
 	void iterateTime();
 	void printMarket();
 	virtual ~Market();
 
+	void dissasembleTransmission();
+	void assembleTransmission();
+
 	vector<Point> cLocs;
 	vector<Point> gLocs;
-	vector<float> values;
-	vector<float> rewards;
-	vector<float> costs;
+	vector<float> exploreCosts; // distance to explore
+
+	vector<Point> rLocs; // relay loc
+	vector<int> roles; // -1 = n/a, 0 = sacrifice, 1 = relay
+	vector<int> mates; // -1 = n/a, # = index of corresponding relay sacrifice
+	vector<bool> returnFlags; // true means returning
+
+	vector<int> reportTimes; // how long until each should report
+	vector<float> reportCosts; // distance to report
+	vector<int> reportRequests; // did someone clear my need to report?
+
 	vector<int> times;
 	vector<float> batteryLeft;
 
+	// my general stuff
 	int myIndex;
-
+	vector<float> transmission; // vector for ros publishing
+	int transmissionLength;
+	int nAgents;
 };
 
 #endif /* MARKET_H_ */

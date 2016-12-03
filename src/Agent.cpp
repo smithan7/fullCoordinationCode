@@ -311,47 +311,32 @@ void Agent::communicate(Costmap &cIn, Market &mIn){
 	this->market.shareMarket( mIn );
 }
 
-void Agent::marketReturnInfo(Agent &a){
-
-	if( this->getDistanceToReportToOperator() < a.getDistanceToReportToOperator() ){ // I will report back
-
-		if( this->reportTime > a.reportTime ){ // if I have longer until I report
-			this->reportTime = a.reportTime; // I get their report time
-		}
-
-		a.reportTime = a.reportInterval; // they reset their report time
-		a.reportFlag = false;
-		a.reportCntr = 0;
-	}
-	else{ // they will report back
-		if( this->reportTime < a.reportTime ){ // if I have less report time
-			a.reportTime = this->reportTime;
-		}
-
-		this->reportTime = this->reportInterval;
-		this->reportFlag = false;
-		this->reportCntr = 0;
-	}
-}
-
 bool Agent::checkReportTime(){
 
 	if( lastReport() ){ // would this be my last time to report?
 		return false;
 	}
 
-	reportCntr++;
-	reportTime--;
+	if( market.reportRequests[market.myIndex] == -1){
+		market.reportRequests[market.myIndex] = 0;
+		market.reportTimes = reportInterval;
+		reportCntr = 0;
+		reportFlag = false;
+	}
+
+	reportCntr++; // tracks me moving away from observer
+	market.reportTimes[market.myIndex]--; // tracks time elapsing until I have to report
 	if(reportCntr >= reportTime){ // has enough time gone by? if yes check distance to update time
 		// may not have travelled in a straight line away from operator location
 		float dR = getDistanceToReportToOperator();
+		market.reportCosts[market.myIndex] = dR;
 
-		if( dR >= reportTime){
+		if( dR >= market.reportTimes[market.myIndex]){
 			reportFlag = true;
 			return true;
 		}
 		else{
-			reportCntr = reportTime - dR;
+			reportCntr = market.reportTimes[market.myIndex] - dR;
 			reportFlag = false;
 			return false;
 		}
@@ -451,7 +436,7 @@ void Agent::plan( string planMethod ){
 	planExplore(planMethod);
 }
 
-void Agent::marketRelaySacrifice(Agent &a){
+void Agent::marketRelaySacrifice(){
 
 	if(this->returnFlag && this->relayFlag ){ // is it time to return and I'm a relay or sacrifice?
 
@@ -473,31 +458,10 @@ void Agent::marketRelaySacrifice(Agent &a){
 
 		}
 	}
-	else if( !this->sacrificeFlag && !this->relayFlag && this->lastReport() ){ // I'm not a sacrifice or relay already
-		if( !a.sacrificeFlag && !a.relayFlag && a.lastReport() && !a.returnFlag){ // and they're not already a relay or sacrifice
-
-			if( this->myIndex > a.myIndex ){
-				this->relayFlag = true; // I'll be a relay, they'll be a sacrifice
-				a.sacrificeFlag = true;
-
-				this->rLoc = a.cLoc; // rLoc is sacrifices location to extend range
-				a.rLoc = a.cLoc;
-				this->sacrificeList.push_back( a.myIndex );
-				a.myRelay = this->myIndex;
-			}
-			else{
-				a.relayFlag = true; // they'll be a relay, I'll be a sacrifice
-				this->sacrificeFlag = true;
-
-				a.rLoc = this->cLoc; // rLoc is sacrifices location to extend range
-				this->rLoc = this->cLoc;
-
-				a.sacrificeList.push_back( this->myIndex );
-				this->myRelay = a.myIndex;
-			}
-		}
+	else if( !market.roles[market.myIndex] == -1 && this->lastReport() ){ // I'm not a sacrifice or relay already and it's last report time
+		market.marketRelaySacrifice();
 	}
-	else if( this->sacrificeFlag && !this->returnFlag && !a.returnFlag){ // I'm a sacrifice, update rLoc
+	else if( market.roles[myIndex] == 0 && !market.returnFlags[myIndex] && !market.returnFlags[a] ){ // I'm a sacrifice, update rLoc
 		if( a.relayFlag && a.myIndex == this->myRelay ){ // theyre my relay, update rLoc
 			a.rLoc = this->cLoc; // rLoc is sacrifices location to extend range
 			this->rLoc = this->cLoc;
@@ -573,7 +537,7 @@ void Agent::planExplore(string planMethod ){
 		}
 		else{
 			for(size_t i=0; i<market.cLocs.size(); i++){
-				costmapCoordination.standingBids[i] = market.values[i];
+				costmapCoordination.standingBids[i] = market.exploreCosts[i];
 				costmapCoordination.goalLocations[i] = market.cLocs[i];
 			}
 		}

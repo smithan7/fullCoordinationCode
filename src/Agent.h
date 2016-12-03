@@ -61,9 +61,8 @@ public:
 	Point reportToOperator();
 	float getDistanceToReportToOperator(); // report means coms with
 	int reportInterval; // how often I am supposed to report
-	int reportTime; // next time I'm supposed to report
 	int reportCntr;  //use this to cnt time, no need to check the report time if time < this, then reset iter with new dist, check A star only a few times
-	bool reportFlag;
+	bool reportFlag; // am I reporting now?
 
 	bool checkReturnTime();
 	Point returnToOperator();

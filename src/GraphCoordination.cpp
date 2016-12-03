@@ -86,9 +86,9 @@ void GraphCoordination::marketPoses( Costmap &costmap, Point cLoc, Point &gLoc, 
 			//cerr << "GraphCoordination::marketPoses::A2" << endl;
 			if( market.gLocs[i].x > 0 && market.gLocs[i].y > 0){
 				//cerr << "GraphCoordination::marketPoses::A3" << endl;
-				if(sqrt(pow(cLoc.x - market.gLocs[i].x,2) + pow(cLoc.y - market.gLocs[i].y,2)) <  market.costs[i]){
+				if(sqrt(pow(cLoc.x - market.gLocs[i].x,2) + pow(cLoc.y - market.gLocs[i].y,2)) <  market.exploreCosts[i]){
 					//cerr << "GraphCoordination::marketPoses::A4" << endl;
-					if(costmap.aStarDist(market.gLocs[i], cLoc) > market.costs[i]){
+					if(costmap.aStarDist(market.gLocs[i], cLoc) > market.exploreCosts[i]){
 						//cerr << "out of aStarDist: true" << endl;
 						flag = true; // I am not a* closer
 					}
@@ -204,7 +204,7 @@ void GraphCoordination::marketPoses( Costmap &costmap, Point cLoc, Point &gLoc, 
 		gLoc = poseGraph.nodeLocations[maxPose];
 
 		market.gLocs[market.myIndex] = gLoc;
-		market.costs[market.myIndex] = poseDistances[maxPose];
+		market.exploreCosts[market.myIndex] = poseDistances[maxPose];
 
 		//cerr << "GraphCoordination::marketPoses::Z" << endl;
 	}
