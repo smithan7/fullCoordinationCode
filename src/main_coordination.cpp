@@ -96,8 +96,8 @@ int main(){
 	for(size_t exploreMethod_iter = 0; exploreMethod_iter<exploreMethod.size(); exploreMethod_iter++){
 		for(int iterations_iter = 0; iterations_iter<numIterations; iterations_iter++){
 
-			Observer humanObserver(sLoc[iterations_iter], numAgents, false, "operator", -1);
-			Observer globalObserver(sLoc[iterations_iter], numAgents, true, "global", -2);// make this observer get maps shared with it and NOT share its map with people it
+			Observer humanObserver(sLoc[iterations_iter], numAgents, false, "operator", numAgents);
+			Observer globalObserver(sLoc[iterations_iter], numAgents, true, "global", -1);// make this observer get maps shared with it and NOT share its map with people it
 			vector<Agent> agents;
 			for(int i=0; i<numAgents; i++){
 
@@ -136,8 +136,6 @@ int main(){
 			while(timeSteps < maxTime-1 && percentObserved < 0.99){
 				cout << "Main::Starting while loop" << endl;
 				timeSteps++;
-				humanObserver.market.iterateTime();
-				globalObserver.market.iterateTime();
 
 				// all agents observe
 				for(int i=0; i<numAgents; i++){
@@ -145,30 +143,35 @@ int main(){
 					agents[i].market.updateMarket(agents[i].cLoc, agents[i].gLoc);
 					world.observe(agents[i].cLoc, globalObserver.costmap);
 				}
+				humanObserver.market.updateMarket( humanObserver.cLoc, humanObserver.cLoc );
+				globalObserver.market.iterateTime();
 				cout << "Main::made observations" << endl;
-
 
 				// all agents communicate
 				for(int i=0; i<numAgents; i++){
 					// all agents communicate with global observer, always
-					agents[i].communicate( globalObserver.costmap, globalObserver.market );
+					vector<int> marketTransmission = agents[i].market.assembleTransmission();
+					vector<int> costmapTransmission = agents[i].costmap.publishCostmap();
+
+					globalObserver.market.dissasembleTransmission( marketTransmission );
+
 					// all agents communicate with humanObserver, if possible
 					if( world.commoCheck(agents[i].cLoc, humanObserver.cLoc, comThresh) ){
-						agents[i].communicate( humanObserver.costmap, humanObserver.market );
-						humanObserver.communicate( agents[i].costmap, agents[i].market );
-						agents[i].reportCntr = 0;
-						agents[i].reportTime = agents[i].reportInterval;
-						agents[i].reportFlag = false;
+						humanObserver.market.dissasembleTransmission( marketTransmission );
+						humanObserver.costmap.subscribeCostmap( costmapTransmission );
+
+						vector<int> obsTran = humanObserver.market.assembleTransmission();
+						agents[i].market.dissasembleTransmission( obsTran );
+
+						vector<int> cmTran = humanObserver.costmap.publishCostmap();
+						agents[i].costmap.subscribeCostmap( cmTran );
 					}
 					// all agents communicate with each other if possible
 					for(int j=0; j<numAgents; j++){
 						if(i!=j){
 							if(world.commoCheck(agents[i].cLoc, agents[j].cLoc, comThresh)){
-								agents[i].communicate( agents[j].costmap, agents[j].market );
-								agents[j].communicate( agents[i].costmap, agents[i].market );
-
-								agents[i].marketRelaySacrifice( agents[j] );
-								agents[i].marketReturnInfo( agents[j] );
+								agents[j].market.dissasembleTransmission( marketTransmission );
+								agents[j].costmap.subscribeCostmap( costmapTransmission );
 							}
 						}
 					}

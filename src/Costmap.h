@@ -80,6 +80,9 @@ public:
 	Mat createCostMat(); // Largely used for inference
 	vector<Point> getImagePointsAt(Mat &image, int intensity); // convert mat to vector of points
 
+	vector<int> publishCostmap();
+	void subscribeCostmap( vector<int> &cm);
+
 	/*retired functions
 
 	float getPercentObserved(Costmap &globalCostmap, Costmap &workingCostmap);

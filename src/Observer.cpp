@@ -20,11 +20,6 @@ Observer::Observer(Point cLoc, int nAgents, bool global, String name, int myInde
 	market.init( nAgents, myIndex );
 }
 
-void Observer::communicate(Costmap &cIn, Market &mIn){
-	this->costmap.shareCostmap(cIn);
-	this->market.shareMarket( mIn );
-}
-
 Observer::~Observer(){}
 
 Scalar Observer::setAgentColor(int index){

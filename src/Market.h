@@ -27,15 +27,13 @@ public:
 	void init(int nAgents, int myIndex);
 	void shareMarket( Market &in );
 	void updateMarket( Point cLoc, Point gLoc );
-	void marketReturnInfo();
-	void marketRelaySacrifice();
 	bool comCheck(int a);
 	void iterateTime();
 	void printMarket();
 	virtual ~Market();
 
-	void dissasembleTransmission();
-	void assembleTransmission();
+	void dissasembleTransmission(vector<int> &transmission);
+	vector<int> assembleTransmission();
 
 	vector<Point> cLocs;
 	vector<Point> gLocs;
@@ -55,8 +53,6 @@ public:
 
 	// my general stuff
 	int myIndex;
-	vector<float> transmission; // vector for ros publishing
-	int transmissionLength;
 	int nAgents;
 };
 

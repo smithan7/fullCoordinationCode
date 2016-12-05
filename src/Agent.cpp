@@ -306,12 +306,13 @@ float Agent::getDistanceToReturnToOperatorFromRelayPt(){
 	return costmap.aStarDist(oLoc, rLoc);
 }
 
-void Agent::communicate(Costmap &cIn, Market &mIn){
-	this->costmap.shareCostmap(cIn);
-	this->market.shareMarket( mIn );
-}
-
 bool Agent::checkReportTime(){
+
+	if(market.times[market.nAgents] <= 1){
+		reportCntr = 0;
+		market.reportTimes[market.myIndex] = reportInterval;
+		reportFlag = false;
+	}
 
 	if( lastReport() ){ // would this be my last time to report?
 		return false;
@@ -319,14 +320,14 @@ bool Agent::checkReportTime(){
 
 	if( market.reportRequests[market.myIndex] == -1){
 		market.reportRequests[market.myIndex] = 0;
-		market.reportTimes = reportInterval;
+		market.reportTimes[market.myIndex] = reportInterval;
 		reportCntr = 0;
 		reportFlag = false;
 	}
 
 	reportCntr++; // tracks me moving away from observer
 	market.reportTimes[market.myIndex]--; // tracks time elapsing until I have to report
-	if(reportCntr >= reportTime){ // has enough time gone by? if yes check distance to update time
+	if(reportCntr >= market.reportTimes[market.myIndex]){ // has enough time gone by? if yes check distance to update time
 		// may not have travelled in a straight line away from operator location
 		float dR = getDistanceToReportToOperator();
 		market.reportCosts[market.myIndex] = dR;
@@ -409,6 +410,10 @@ void Agent::infer( string inferenceMethod,  World &world ){
 
 void Agent::plan( string planMethod ){
 
+
+	marketRelaySacrifice();
+	marketReturnInfo();
+
 	// all agents check if they should return, includes relay / sacrifice / normal
 	if( checkReturnTime() || checkForExplorationFinished() ){
 		if(relayFlag){
@@ -437,43 +442,58 @@ void Agent::plan( string planMethod ){
 }
 
 void Agent::marketRelaySacrifice(){
+	for(int a = 0; a<market.nAgents; a++){
+		if( market.comCheck(a) ){
+			if( market.roles[a] == -1){ // and they're not already a relay or sacrifice
 
-	if(this->returnFlag && this->relayFlag ){ // is it time to return and I'm a relay or sacrifice?
+				if( myIndex > a ){
+					market.roles[myIndex] = 1; // I'll be a relay, they'll be a sacrifice
+					market.roles[a] = 0;
+					this->relayFlag = true;
 
-		if(this->relayFlag){ // if I'm a relay
-			// is a on my sacrifice list?, if yes, remove them
-			if(this->myIndex == a.myRelay && a.batteryLeft <= 0){
-				for(size_t i=0; i<this->sacrificeList.size(); i++){
-					if(a.myIndex == this->sacrificeList[i]){
-						this->sacrificeList.erase(this->sacrificeList.begin() + i);
-						break;
-					}
+					market.rLocs[myIndex] = market.cLocs[a];
+					market.rLocs[a] = market.cLocs[a];
+
+					market.mates[myIndex] = a;
+					market.mates[a] = myIndex;
+				}
+				else{
+					market.roles[myIndex] = 0; // I'll be a relay, they'll be a sacrifice
+					market.roles[a] = 1;
+					this->sacrificeFlag = true;
+
+					market.rLocs[myIndex] = market.cLocs[myIndex];
+					market.rLocs[a] = market.cLocs[myIndex];
+
+					market.mates[myIndex] = a;
+					market.mates[a] = myIndex;
 				}
 			}
-
-			// is my sacrifice list empty? if yes clear my relay flag
-			if(this->sacrificeList.size() == 0){
-				this->relayFlag = false;
-			}
-
-		}
-	}
-	else if( !market.roles[market.myIndex] == -1 && this->lastReport() ){ // I'm not a sacrifice or relay already and it's last report time
-		market.marketRelaySacrifice();
-	}
-	else if( market.roles[myIndex] == 0 && !market.returnFlags[myIndex] && !market.returnFlags[a] ){ // I'm a sacrifice, update rLoc
-		if( a.relayFlag && a.myIndex == this->myRelay ){ // theyre my relay, update rLoc
-			a.rLoc = this->cLoc; // rLoc is sacrifices location to extend range
-			this->rLoc = this->cLoc;
-		}
-	}
-	else if( this->relayFlag && !this->returnFlag && !a.returnFlag){ // I'm a relay, update rLoc
-		if( a.sacrificeFlag && this->myIndex == a.myRelay ){ // theyre my relay, update rLoc
-			this->rLoc = a.cLoc; // rLoc is sacrifices location to extend range
-			a.rLoc = a.cLoc;
 		}
 	}
 }
+
+void Agent::marketReturnInfo(){
+
+
+	if(market.reportRequests[market.myIndex]  < 0){
+		market.reportTimes[market.myIndex] = reportInterval;
+		market.reportRequests[market.myIndex] = 0;
+	}
+
+	for( int a = 0; a<market.nAgents; a++){
+		if( market.comCheck(a) ){ // am I in contact with them currently?
+			if( market.reportCosts[myIndex] < market.reportCosts[a] ){ // am I closer to observer?
+
+				if( market.reportTimes[myIndex] < market.reportTimes[a] ){ // if I have longer until I report
+					market.reportTimes[myIndex] = market.reportTimes[a]; // I get their report time
+				}
+				market.reportRequests[a] = -1; // they reset their report time
+			}
+		}
+	}
+}
+
 
 Point Agent::returnToRelayPt(){
 	return rLoc;
@@ -666,7 +686,10 @@ void Agent::showCellsPlot(){
 }
 
 void Agent::pickMyColor(){
-	this->myColor = {0,0,0};
+	this->myColor[0] = 0;
+	this->myColor[1] = 0;
+	this->myColor[2] = 0;
+
 
 	if(this->myIndex == 0){
 		this->myColor[0] = 255;

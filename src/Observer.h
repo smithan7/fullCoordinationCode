@@ -26,7 +26,7 @@ public:
 
 	Costmap costmap;
 	Market market;
-	void communicate(Costmap &cIn, Market &mIn);
+
 	void showCellsPlot();
 	void addAgentsToCostmapPlot();
 	Scalar setAgentColor(int i);

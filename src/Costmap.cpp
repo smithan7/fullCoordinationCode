@@ -53,6 +53,41 @@ void Costmap::shareCostmap( Costmap &cIn ){
 	}
 }
 
+vector<int> Costmap::publishCostmap(){
+	vector<int> cm;
+	for(int i=0; i<cells.cols; i++){
+		for(int j=0; j<cells.rows; j++){
+			Point a(i,j);
+			if(this->cells.at<short>(a) == this->obsFree || this->cells.at<short>(a) == this->obsWall){ // B has observed
+					cm.push_back( this->cells.at<short>(a) );
+			}
+			else{
+				cm.push_back( unknown );
+			}
+		}
+	}
+	return cm;
+}
+
+void Costmap::subscribeCostmap( vector<int> &cm ){
+
+	int iter = 0;
+	for(int i=0; i<cells.cols; i++){
+		for(int j=0; j<cells.rows; j++){
+			Point a(i,j);
+			if(this->cells.at<short>(a) != cm[iter]){
+				if(cm[iter] == this->obsFree || cm[iter] == this->obsWall){ // B has observed
+					cells.at<short>(a) = cm[iter];
+				}
+			}
+
+			iter++;
+		}
+	}
+}
+
+
+
 void Costmap::simulateObservation(Point pose, Mat &resultingView, vector<Point> observedCells, float obsRadius){
 
 	// make perimeter of viewing circle fit on image

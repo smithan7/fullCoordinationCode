@@ -50,7 +50,6 @@ public:
 	Market market;
 
 	// working
-	void communicate(Costmap &cIn, Market &mIn);
 	void infer(string inferenceMethod, World &World);
 	void plan(string planMethod);
 	void planExplore(string planMethod);
@@ -64,16 +63,17 @@ public:
 	int reportCntr;  //use this to cnt time, no need to check the report time if time < this, then reset iter with new dist, check A star only a few times
 	bool reportFlag; // am I reporting now?
 
+	void marketReturnInfo();
 	bool checkReturnTime();
 	Point returnToOperator();
-	void marketReturnInfo(Agent &a);
 	bool checkForExplorationFinished();
 	float getDistanceToReturnToOperator(); // return means travel to
 	float batteryLeft; // counts down
 	int returnTime; // counts up with occasional reductions based on travel distance
 	bool returnFlag; // time to return
 
-	void marketRelaySacrifice(Agent &a);
+
+	void marketRelaySacrifice();
 	Point reportToRelayPt();
 	Point returnToRelayPt();
 	float getDistanceToReportToRelayPt(); // report means coms with
