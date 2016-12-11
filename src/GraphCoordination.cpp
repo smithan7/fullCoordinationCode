@@ -75,10 +75,13 @@ void GraphCoordination::init( float obsRadius, float comRadius){
 
 void GraphCoordination::marketPoses( Costmap &costmap, Point cLoc, Point &gLoc, Market &market ){
 
-	//cerr << "GraphCoordination::marketPoses::A" << endl;
+
+	// update each agents bid assuming they took an optimal step
+	for(size_t i=0; i<market.exploreCosts.size(); i++){
+		market.exploreCosts[i] -= float(market.times[i]);
+	}
 
 	// am I closer to any poses in market than the current purchaser?
-
 	for(size_t i=0; i<market.gLocs.size(); i++){
 		//cerr << "GraphCoordination::marketPoses::A1" << endl;
 		if( i != market.myIndex ){
@@ -86,16 +89,15 @@ void GraphCoordination::marketPoses( Costmap &costmap, Point cLoc, Point &gLoc, 
 			//cerr << "GraphCoordination::marketPoses::A2" << endl;
 			if( market.gLocs[i].x > 0 && market.gLocs[i].y > 0){
 				//cerr << "GraphCoordination::marketPoses::A3" << endl;
-				if(sqrt(pow(cLoc.x - market.gLocs[i].x,2) + pow(cLoc.y - market.gLocs[i].y,2)) <  market.exploreCosts[i]){
+				if(sqrt(pow(cLoc.x - market.gLocs[i].x,2) + pow(cLoc.y - market.gLocs[i].y,2)) <=  market.exploreCosts[i]){
 					//cerr << "GraphCoordination::marketPoses::A4" << endl;
-					if(costmap.aStarDist(market.gLocs[i], cLoc) > market.exploreCosts[i]){
+					if(costmap.aStarDist(market.gLocs[i], cLoc) - market.exploreCosts[i] > 0.1){
 						//cerr << "out of aStarDist: true" << endl;
 						flag = true; // I am not a* closer
 					}
-					else{
-						//cerr << "out of aStarDist: false********" << endl;
+					else if(abs(costmap.aStarDist(market.gLocs[i], cLoc) - market.exploreCosts[i]) < 0.1 && market.myIndex < i){
+						flag = true;
 					}
-					//cerr << "past a* t/f" << endl;
 				}
 				else{ // I am not euclidian closer
 					//cerr << "GraphCoordination::marketPoses::A5" << endl;
@@ -379,7 +381,7 @@ void GraphCoordination::findPosesEvolution(Costmap &costmap){
 			oPoses.erase(oPoses.begin() + c);
 		}
 	}
-	printf("Time taken to create get poses: %.2fs\n", (double)(clock() - tStart1)/CLOCKS_PER_SEC);
+	//printf("Time taken to create get poses: %.2fs\n", (double)(clock() - tStart1)/CLOCKS_PER_SEC);
 
 	//cerr << "GraphCoordination::findPosesEvolution::D::cReward / gReward: " << cReward << " / " << gReward << endl;
 	int cPost = cPoses.size();
@@ -405,8 +407,8 @@ void GraphCoordination::findPosesEvolution(Costmap &costmap){
 		iter++;
 	}
 
-	plotPoses( costmap, cPoses, oPoses, poseViews , poseLocations);
-	waitKey(1);
+	//plotPoses( costmap, cPoses, oPoses, poseViews , poseLocations);
+	//waitKey(1);
 
 	poseGraph.nodeLocations.clear();
 	poseGraph.nodeObservations.clear();

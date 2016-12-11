@@ -24,7 +24,7 @@ using namespace std;
 class Market {
 public:
 	Market();
-	void init(int nAgents, int myIndex);
+	void init(int nAgents, int myIndex, bool enableRelaySacrifice);
 	void shareMarket( Market &in );
 	void updateMarket( Point cLoc, Point gLoc );
 	bool comCheck(int a);

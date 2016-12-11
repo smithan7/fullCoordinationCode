@@ -43,15 +43,16 @@ int main(){
 	srand( time(NULL) );
 	bool videoFlag = true;
 
-	int numAgents = 3;
+	int numAgents = 2;
 	int numIterations = 1;
 
-	int gSpace = 2;
+	int gSpace = 4;
 	float obsThresh = 50;
 	float comThresh = 100;
 	int maxTime = 500;
-	int reportInterval = 100;
+	int reportInterval = 500;
 	float batteryInit = 500;
+	bool enableRelaySacrifice = false;
 
 	vector<string> fName;
 	//fName.push_back("mineMap");
@@ -67,7 +68,8 @@ int main(){
 	//exploreMethod.push_back("pose");
 	//exploreMethod.push_back("select");
 	exploreMethod.push_back("selectPose");
-	//exploreMethod.push_back("greedy");
+	//exploreMethod.push_back("greedyFrontiers");
+	//exploreMethod.push_back("marketFrontiers");
 
 	vector<string> inferenceMethod;
 	//inferenceMethod.push_back("naive");
@@ -96,13 +98,13 @@ int main(){
 	for(size_t exploreMethod_iter = 0; exploreMethod_iter<exploreMethod.size(); exploreMethod_iter++){
 		for(int iterations_iter = 0; iterations_iter<numIterations; iterations_iter++){
 
-			Observer humanObserver(sLoc[iterations_iter], numAgents, false, "operator", numAgents);
-			Observer globalObserver(sLoc[iterations_iter], numAgents, true, "global", -1);// make this observer get maps shared with it and NOT share its map with people it
+			Observer humanObserver(sLoc[iterations_iter], numAgents, false, "operator", numAgents, enableRelaySacrifice);
+			Observer globalObserver(sLoc[iterations_iter], numAgents, true, "global", -1, enableRelaySacrifice);// make this observer get maps shared with it and NOT share its map with people it
 			vector<Agent> agents;
 			for(int i=0; i<numAgents; i++){
 
 				// if the same starting locations
-				agents.push_back(Agent(sLoc[iterations_iter*numAgents], i, batteryInit, obsThresh, comThresh, numAgents, reportInterval ));
+				agents.push_back(Agent(sLoc[iterations_iter*numAgents], i, batteryInit, obsThresh, comThresh, numAgents, reportInterval, enableRelaySacrifice ));
 				cout << "Main::Agent[" << i << "]: created at : " << sLoc[iterations_iter*numAgents].x << " , " << sLoc[iterations_iter*numAgents].y << endl;
 				// if different starting locations
 				//agents.push_back(Agent(sLoc[iterations_iter*numAgents+i], i, obsThresh, comThresh, numAgents, reportInterval, returnTime));

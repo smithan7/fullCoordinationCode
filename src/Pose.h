@@ -21,9 +21,9 @@ using namespace cv;
 
 class Pose {
 public:
-	Pose(Point loc, Costmap &costmap, float radius, int nSamples);
+	Pose(Point loc, Costmap &costmap);
 	virtual ~Pose();
-	void initPose(Costmap &costmap, float radius, int nSamples);
+	void initPose(Costmap &costmap);
 	void makeMat();
 	void addToMat(Mat &matIn);
 
@@ -35,6 +35,9 @@ public:
 	bool needInference;
 	float mean;
 	float stanDev;
+
+	float radius;
+	int nSamples;
 
 	void getMean();
 	void getStanDev();

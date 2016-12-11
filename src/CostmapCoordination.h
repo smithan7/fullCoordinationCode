@@ -15,8 +15,10 @@
 
 #include "World.h" // includes - costmap.h
 #include "Frontier.h"
+#include "Market.h"
 
 using namespace std;
+using namespace cv;
 
 class CostmapCoordination {
 public:
@@ -29,12 +31,7 @@ public:
 	void clusterFrontiers(vector<Point> frntList, Costmap &costmap); // cluster Frontiers into groups
 
 	// market frontiers
-	void initializeMarket(int nAgents);
-	void placeMyOrder(Costmap &costmap, Point cLoc, int myIndex);
-	Point marketFrontiers(Costmap & costmap, Point cLoc, int myIndex);
-
-	vector<float> standingBids; // this is nAgents long
-	vector<Point> goalLocations; // this is nAgents long
+	Point marketFrontiers( Costmap &costmap, Point cLoc, Market &market);
 
 	// useful functions
 	void findClosestFrontier(Costmap &costmap, Point cLoc, int &goalIndex, float &goalDist);

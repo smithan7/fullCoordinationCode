@@ -46,22 +46,6 @@ Inference::Inference() {
 	wallInflationDistance = 2; // must be a wall within n cells to inflate
 	freeInflationDistance = 2; // cannot be an obsFree cell within n cells and inflate
 	minContourToInfer = 100;
-
-	int obsRadius = 60;
-	Mat temp =Mat::zeros(2*(obsRadius + 1), 2*(obsRadius + 1), CV_8UC1);
-	Point cent;
-	cent.x = obsRadius;
-	cent.y = obsRadius;
-	circle(temp,cent,obsRadius, Scalar(255), -1, 8);
-
-    vector<vector<Point> > contours;
-    vector<Vec4i> hierarchy;
-    findContours( temp, contours, hierarchy, CV_RETR_TREE, CV_CHAIN_APPROX_NONE);
-
-    for(size_t i=0; i<contours[0].size(); i++){
-    		Point t(contours[0][i].x-obsRadius, contours[0][i].y-obsRadius);
-    		viewPerim.push_back(t);
-    }
 }
 
 void Inference::resetInference(Costmap &costmap){
@@ -93,6 +77,11 @@ void Inference::makeInference(string method, Costmap &costmap, World &world){
 		makeGlobalInference( world, costmap );
 		makeNaiveInference( costmap );
 	}
+	else if(method.compare("visual") == 0){
+		resetInference( costmap );
+		makeGeometricInference( costmap );
+		makeNaiveInference( costmap );
+}
 }
 
 Inference::~Inference(){}
@@ -139,6 +128,23 @@ void Inference::makeGlobalInference(World &world, Costmap &costmap){
 	}
 }
 
+void Inference::init(float obsRadius){
+	Mat temp =Mat::zeros(2*(obsRadius + 1), 2*(obsRadius + 1), CV_8UC1);
+	Point cent;
+	cent.x = obsRadius;
+	cent.y = obsRadius;
+	circle(temp,cent,obsRadius, Scalar(255));
+
+	for(int i=0; i<temp.cols; i++){
+		for(int j=0; j<temp.rows; j++){
+			if(temp.at<uchar>(i,j,0) == 255){
+				Point t(i-obsRadius, j-obsRadius);
+				viewPerim.push_back(t);
+			}
+		}
+	}
+}
+
 void Inference::makeVisualInference(Costmap &costmap, Graph &graph){
 	Mat visualInferenceMat = costmap.cells.clone();
 
@@ -147,79 +153,110 @@ void Inference::makeVisualInference(Costmap &costmap, Graph &graph){
 	visualInferenceOnFreeSpace( costmap, graph, visualInferenceMat);
 }
 
-void Inference::visualInferenceOnFreeSpace( Costmap &costmap, Graph &graph, Mat &visInfMat ){
+Pose Inference::visualInferenceGetPose( Costmap &costmap, Point iLoc){
+	cerr << "iLoc: " << iLoc << endl;
+	Pose ps(iLoc, costmap);
 
-	float poseRadius = 40;
-	int poseSamples = 36;
+	if(!ps.needInference){
+		Mat obsMat;
+		this->simulateObservation(ps.loc, obsMat, costmap);
+		ps.mat = obsMat.clone();
+	}
+	cerr << "ps.loc: " << ps.loc << endl;
+}
 
-	int poseIter = 0;
-	while(poseIter < 2){
-		poseIter++;
-		Mat graphR = Mat::zeros(visInfMat.size(), CV_8UC3);
+void Inference::visualInferenceOnFreeSpace( Costmap &costmap, Graph &graph, Mat &visInfMat){
+
+	for(int infIters = 0; infIters < 10; infIters++){
+
+		Mat graphR = Mat::zeros(visInfMat.size(), CV_8UC3); // select random pts
 
 		// get views from nodes on travel graph
-		int ns = rand() % graph.nodeLocations.size();
-		Pose ps(graph.nodeLocations[ns], costmap, poseRadius, poseSamples);
 
-		//ps.makeMat();
-		//namedWindow("obs mat", WINDOW_NORMAL);
-		//imshow("obs mat", ps.mat );
-		//waitKey(1);
+		int ns = int(rand() % graph.nodeLocations.size());
 
-		Pose mp(graph.nodeLocations[ns], costmap, poseRadius, poseSamples);
+		cerr << "ns: " << ns << " , " << graph.nodeLocations[ns] << endl;
 
-		vector<float> rv;
-		float mr = INFINITY;
-		float mr2 = -INFINITY;
-		for(size_t i=0; i<graph.nodeLocations.size(); i++){
-			if( i != ns ){
-				Pose ts(graph.nodeLocations[i], costmap, poseRadius, poseSamples);
-				int orient = 0;
+		Pose testPose(graph.nodeLocations[ns], costmap);
 
-				rv.push_back( calcVisualFit( ps , ts, costmap, orient) );
-				if( rv.back() < mr ){
-					mr = rv.back();
-					mp = ps;
+		if(!testPose.needInference){
+			Mat obsMat;
+			this->simulateObservation(testPose.loc, obsMat, costmap);
+			testPose.mat = obsMat.clone();
+		}
+
+
+		cerr << "testPose: " << testPose.loc << " , " << testPose.needInference << " , " << testPose.radius << endl;
+		cerr << "a" << endl;
+		if( !testPose.needInference ){
+			visualLibrary.push_back( testPose );
+		}
+		else if(false){
+
+
+			//ps.makeMat();
+			//namedWindow("obs mat", WINDOW_NORMAL);
+			//imshow("obs mat", ps.mat );
+			//waitKey(1);
+
+			vector<float> rv;
+			float minFit = INFINITY;
+			float maxFit = -INFINITY;
+			int maxOrient = -1;
+			Pose maxPose(graph.nodeLocations[ns], costmap);
+			for(size_t i=0; i<graph.nodeLocations.size(); i++){
+				if( i != ns ){
+					Pose ts(graph.nodeLocations[i], costmap);
+					int orient = 0;
+
+					rv.push_back( calcVisualFit( testPose , ts, costmap, orient) );
+					if( rv.back() < minFit ){
+						minFit = rv.back();
+						maxPose = ts;
+						maxOrient = orient;
+					}
+
+					if( rv.back() > maxFit ){
+						maxFit = rv.back();
+					}
+
+
+					//cout << "r: " << rv.back() << endl;
+
+					//drawHistogram( ps.obsLen, "observed");
+					//drawHistogram( ts.obsLen, "library");
+
+					//ts.makeMat();
+					//namedWindow("lib mat", WINDOW_NORMAL);
+					//imshow("lib mat", ts.mat );
+					//waitKey(1);
+
 				}
-
-				if( rv.back() > mr2 ){
-					mr2 = rv.back();
-				}
-
-
-				//cout << "r: " << rv.back() << endl;
-
-				//drawHistogram( ps.obsLen, "observed");
-				//drawHistogram( ts.obsLen, "library");
-
-				//ts.makeMat();
-				//namedWindow("lib mat", WINDOW_NORMAL);
-				//imshow("lib mat", ts.mat );
-				//waitKey(1);
-
 			}
+
+			//mp.makeMat();
+			//namedWindow("best mat", WINDOW_NORMAL);
+			//imshow("best mat", mp.mat );
+			//waitKey(1);
+
+			cout << "rv: ";
+			for(size_t i=0; i<rv.size(); i++){
+				cout << rv[i] << ", ";
+				float val = (rv[i]-minFit) / (maxFit - minFit);
+				Scalar rc( int(255*val), int(255*val), 255 );
+				circle( graphR, graph.nodeLocations[i], 2, rc, -1, 8);
+			}
+			cout << endl;
+
+			circle( graphR, graph.nodeLocations[ns], 2, (255,255,255), -1, 8);
+
+			namedWindow( "vis inference rewards" , WINDOW_NORMAL);
+			imshow( "vis inference rewards", graphR);
+			waitKey(0);
 		}
-
-		//mp.makeMat();
-		//namedWindow("best mat", WINDOW_NORMAL);
-		//imshow("best mat", mp.mat );
-		//waitKey(1);
-
-		cout << "rv: ";
-		for(size_t i=0; i<rv.size(); i++){
-			cout << rv[i] << ", ";
-			//Scalar rc( 255*(1-(rv[i] / mr2)), 255*(1-(rv[i] / mr2)), 255 );
-			Scalar rc( 255*((rv[i] / mr2)), 255*((rv[i] / mr2)), 255 );
-			circle( graphR, graph.nodeLocations[i], 2, rc, -1, 8);
-		}
-		cout << endl;
-
-		circle( graphR, graph.nodeLocations[ns], 2, (255,255,255), -1, 8);
-
-		namedWindow( "vis inference rewards" , WINDOW_NORMAL);
-		imshow( "vis inference rewards", graphR);
-		waitKey(0);
+		cerr << "b" << endl;
 	}
+	cerr << "c" << endl;
 
 
 
@@ -248,9 +285,6 @@ void Inference::visualInferenceOnObstacleContours( Costmap &costmap, Mat &visInf
 	// then run graph builder on each contour to get poses
 }
 
-void Inference::addToVisualLibrary(Pose &pose){ //
-	visualLibrary.push_back(pose);
-}
 
 void Inference::testPoseAgainstLibrary(Pose &oPose){
 
@@ -862,14 +896,14 @@ void Inference::doorFinderAlongFrontiers(Costmap &costmap, vector<Vec4i> &doors)
 		// project the frontier out
 		Point pointA, pointB, pointM;
 		// end of projection in one direction
-		pointA.x = frontiers[i].centroid.x+projectionDistance*frontiers[i].orient[0];
-		pointA.y = frontiers[i].centroid.y+projectionDistance*frontiers[i].orient[1];
+		pointA.x = frontiers[i].center.x+projectionDistance*frontiers[i].orient[0];
+		pointA.y = frontiers[i].center.y+projectionDistance*frontiers[i].orient[1];
 		// end of projection in second direction
-		pointB.x = frontiers[i].centroid.x-projectionDistance*frontiers[i].orient[0];
-		pointB.y = frontiers[i].centroid.y-projectionDistance*frontiers[i].orient[1];
+		pointB.x = frontiers[i].center.x-projectionDistance*frontiers[i].orient[0];
+		pointB.y = frontiers[i].center.y-projectionDistance*frontiers[i].orient[1];
 		// mid point of projection
-		pointM.x = frontiers[i].centroid.x;
-		pointM.y = frontiers[i].centroid.y;
+		pointM.x = frontiers[i].center.x;
+		pointM.y = frontiers[i].center.y;
 
 		// scan along projection
 		vector<float> lengths;
@@ -890,7 +924,7 @@ void Inference::doorFinderAlongFrontiers(Costmap &costmap, vector<Vec4i> &doors)
 		}
 
 
-		temp.at<uchar>(frontiers[i].centroid[0], frontiers[i].centroid[1]) = 127;
+		temp.at<uchar>(frontiers[i].center[0], frontiers[i].center[1]) = 127;
 		Point p1, p2;
 		p1.y = pointA[0];
 		p1.x = pointA[1];
@@ -931,11 +965,11 @@ void Inference::doorFinderAlongFrontiers(Costmap &costmap, vector<Vec4i> &doors)
 			freeMat.at<uchar>(frontiers[i].members[j][0], frontiers[i].members[j][1]) = 127;
 		}
 
-		Point cen(frontiers[i].centroid[1], frontiers[i].centroid[0]);
+		Point cen(frontiers[i].center[1], frontiers[i].center[0]);
 		Point pro(frontiers[i].projection[1], frontiers[i].projection[0]);
 		line(freeMat, cen, pro, Scalar(127), 2, 8);
 
-		//cout << "frontier[" << i << "]::center: " << frontiers[i].centroid[0] << ", " << frontiers[i].centroid[1] << endl;
+		//cout << "frontier[" << i << "]::center: " << frontiers[i].center[0] << ", " << frontiers[i].center[1] << endl;
 		//cout << "frontier[" << i << "]::orient " << frontiers[i].orient[0] << ", " << frontiers[i].orient[1] << endl;
 
 		waitKey(0);
@@ -2435,8 +2469,8 @@ void Inference::displayInferenceMat(Costmap &costmap, Mat &outerHullDrawing, Mat
 	Mat Frontiers = Mat::zeros(outerHullDrawing.size(), CV_8UC1);//getFrontiersImage();
 	for(size_t i=0; i<frontiers.size(); i++){
 		circle(Frontiers, frontiers[i].projection, 1, Scalar(100), -1);
-		circle(Frontiers, frontiers[i].centroid,    1, Scalar(200), -1);
-		line(Frontiers, frontiers[i].projection, frontiers[i].centroid, Scalar(100), 1, 8);
+		circle(Frontiers, frontiers[i].center,    1, Scalar(200), -1);
+		line(Frontiers, frontiers[i].projection, frontiers[i].center, Scalar(100), 1, 8);
 	}
 
 	vector<vector<Point> > contours2;
@@ -2491,9 +2525,9 @@ void Inference::displayInferenceMat(Costmap &costmap, Mat &outerHullDrawing, Mat
 		if(radius < 1){
 			radius = 1;
 		}
-		circle(inferDisplay,  frontiers[i].centroid, radius, color,-1,8);
+		circle(inferDisplay,  frontiers[i].center, radius, color,-1,8);
 		color[2] = 255;
-		line(inferDisplay,frontiers[i].projection, frontiers[i].centroid,color,5,8);
+		line(inferDisplay,frontiers[i].projection, frontiers[i].center,color,5,8);
 	}
 
 	for(size_t i=0; i<frontierExits.size(); i++){
@@ -2693,6 +2727,31 @@ void Inference::simulateObservation(Point pose, Mat &resultingView, Costmap &cos
 	}
 }
 
+void Inference::simulateObservation(Point pose, Mat &resultingView, Costmap &costmap){
+	// make perimeter of viewing circle fit on image
+
+	for(size_t i=0; i<viewPerim.size(); i++){
+		Point v(viewPerim[i].x + pose.x, viewPerim[i].y + pose.y);
+
+		//circle(ta, v, 1, Scalar(255), -1, 8);
+
+		LineIterator it(costmap.cells, pose, v, 4, false);
+
+		for(int i=0; i<it.count; i++, ++it){
+
+			Point pp  = it.pos();
+			//circle(ta, pp, 1, Scalar(255), -1, 8);
+
+			if(!pointOnMat(pp, costmap.cells) || costmap.cells.at<uchar>(pp) > costmap.infFree){
+				break;
+			}
+			else if(costmap.cells.at<uchar>(pp) == costmap.obsFree){
+				resultingView.at<uchar>(pp) = 255;
+			}
+		}
+	}
+}
+
 vector<Point> Inference::findFrontiers(Costmap &costmap){
 	vector<Point> frontiersList;
 	for(int i=1; i<costmap.cells.cols-1; i++){
@@ -2722,12 +2781,12 @@ vector<Point> Inference::findFrontiers(Costmap &costmap){
 }
 
 void Inference::clusterFrontiers(vector<Point>  frntList, Costmap &costmap){
-	// check to see if frnt.centroid is still a Frontier cell, if so keep, else delete
+	// check to see if frnt.center is still a Frontier cell, if so keep, else delete
 	for(size_t i=0; i<this->frontiers.size(); i++){
 		this->frontiers[i].editFlag = true;
 		bool flag = true;
 		for(size_t j=0; j<frntList.size(); j++){
-			if(this->frontiers[i].centroid == frntList[j]){
+			if(this->frontiers[i].center == frntList[j]){
 				flag = false;
 				frntList.erase(frntList.begin()+j);
 			}
@@ -2743,7 +2802,7 @@ void Inference::clusterFrontiers(vector<Point>  frntList, Costmap &costmap){
 	for(size_t i=0; i<this->frontiers.size(); i++){ // keep checking for new Frontier clusters while there are unclaimed Frontiers
 		vector<Point> q; // current cluster
 		vector<Point> qP; // open set in cluster
-		qP.push_back(this->frontiers[i].centroid);
+		qP.push_back(this->frontiers[i].center);
 
 		while((int)qP.size() > 0){ // find all nbrs of those in q
 			Point seed = qP[0];
@@ -3764,7 +3823,7 @@ void GraphCoordination::growFrontiers(vector<Frontier> frnt){
 
 	// Frontier useful class members
 	vector<float> orient; // unit vector descirbing orientation
-	vector<int> centroid; // [x/y]
+	vector<int> center; // [x/y]
 	vector<vector<int> > members; // [list][x/y]
 
 
@@ -3774,7 +3833,7 @@ void GraphCoordination::growFrontiers(vector<Frontier> frnt){
 
 	threshold(temp,temp,10,255,CV_THRESH_BINARY);
 	for(size_t i=0; i<frnt.size(); i++){
-		temp.at<uchar>(frnt[i].centroid[0],frnt[i].centroid[1],0) = 255;
+		temp.at<uchar>(frnt[i].center[0],frnt[i].center[1],0) = 255;
 	}
 
 	// find all Frontiers with traversable bath through free and observed space between them using line check
@@ -3783,9 +3842,9 @@ void GraphCoordination::growFrontiers(vector<Frontier> frnt){
 		vector<Frontier> t;
 		t.push_back(frnt[i]);
 		for(size_t j=i+1; j<frnt.size(); j++){
-			if(lineTraversabilityCheck(freeMat, frnt[i].centroid, frnt[j].centroid, 255)){
+			if(lineTraversabilityCheck(freeMat, frnt[i].center, frnt[j].center, 255)){
 				t.push_back(frnt[j]);
-				line(temp, Point{frnt[i].centroid[1], frnt[i].centroid[0]},Point{frnt[j].centroid[1], frnt[j].centroid[0]}, Scalar(127), 1, 8);
+				line(temp, Point{frnt[i].center[1], frnt[i].center[0]},Point{frnt[j].center[1], frnt[j].center[0]}, Scalar(127), 1, 8);
 			}
 		}
 		mFrnts.push_back(t);

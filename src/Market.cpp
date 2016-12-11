@@ -13,7 +13,7 @@ void printVector(vector<float> v);
 
 Market::Market(){}
 
-void Market::init(int nAgents, int myIndex) {
+void Market::init(int nAgents, int myIndex, bool enableRelaySacrifice) {
 
 	for(int i=0; i<nAgents+1; i++){
 		Point a(0,0);
@@ -48,7 +48,7 @@ void Market::iterateTime(){
 }
 
 bool Market::comCheck(int a){
-	if(times[a] == 0 && a != myIndex){ // am I in contact with them currently?
+	if(times[a] <= 1 && a != myIndex){ // am I in contact with them currently?
 		return true;
 	}
 	return false;
@@ -58,32 +58,33 @@ vector<int> Market::assembleTransmission(){
 	// turn the 1d vector into standard market
 
 	vector<int> transmission;
-	for(int i=0; i<nAgents+1; i++){
-		transmission.push_back( cLocs[i].x );
-		transmission.push_back( cLocs[i].y);
-		transmission.push_back( gLocs[i].x);
-		transmission.push_back( gLocs[i].y);
-		transmission.push_back( int(exploreCosts[i]) * 100 );
+	for(int i=0; i<nAgents+1; i++){ // +1 is to account for observer
+		transmission.push_back( cLocs[i].x ); // 0
+		transmission.push_back( cLocs[i].y); // 1
+		transmission.push_back( gLocs[i].x); // 2
+		transmission.push_back( gLocs[i].y); // 3
+		transmission.push_back( int(exploreCosts[i] * 100) ); // 4
 
-		transmission.push_back( reportTimes[i]);
-		transmission.push_back( int(reportCosts[i]) * 100 );
-		transmission.push_back( reportRequests[i]);
+		transmission.push_back( reportTimes[i]); // 5
+		transmission.push_back( int(reportCosts[i] * 100) ); // 6
+		transmission.push_back( reportRequests[i]); // 7
 
-		transmission.push_back( rLocs[i].x);
-		transmission.push_back( rLocs[i].y);
-		transmission.push_back( roles[i]);
-		transmission.push_back( mates[i]);
+		transmission.push_back( rLocs[i].x); // 8
+		transmission.push_back( rLocs[i].y); // 9
+		transmission.push_back( roles[i]); // 10
+		transmission.push_back( mates[i]); // 11
 
-		transmission.push_back( times[i] );
+		transmission.push_back( times[i] ); // 12
 	}
 
 	return transmission;
 }
 
 void Market::dissasembleTransmission(vector<int> &transmission){
+
 	// turn the 1d vector into a standard market
 	int transmissionLength = 13;
-	for(int i=0; i<nAgents+1; i++){
+	for(int i=0; i<nAgents+1; i++){ // +1 is to account for observer
 		if( transmission[i*transmissionLength+12] < times[i] && i != myIndex ){ // only update market if the info is new and not me
 			cLocs[i].x = transmission[i*transmissionLength];
 			cLocs[i].y = transmission[i*transmissionLength+1];
@@ -101,17 +102,17 @@ void Market::dissasembleTransmission(vector<int> &transmission){
 			roles[i] = transmission[i*transmissionLength+10];
 			mates[i] = transmission[i*transmissionLength+11];
 
-			times[i] = transmission[i*transmissionLength+12]+1;
+			times[i] = transmission[i*transmissionLength+12]+1; // add 1 for my hop
 		}
 
-		if( i == myIndex ){ // if it is me check return and relay / sacrfice
-			reportRequests[i] = transmission[i*nAgents+7]; // check for requests
+		if( i == myIndex){ // if it is me check return and relay / sacrfice
+			reportRequests[i] = transmission[i*transmissionLength+7]; // check for requests
 
-			if(transmission[i*nAgents+10]){ // check if someone has made me a relay / sacrifice
-				rLocs[i].x = transmission[i*nAgents+8];
-				rLocs[i].y = transmission[i*nAgents+9];
-				roles[i] = transmission[i*nAgents+10];
-				mates[i] = transmission[i*nAgents+11];
+			if(transmission[i*transmissionLength+10]){ // check if someone has made me a relay / sacrifice
+				rLocs[i].x = transmission[i*transmissionLength+8];
+				rLocs[i].y = transmission[i*transmissionLength+9];
+				roles[i] = transmission[i*transmissionLength+10];
+				mates[i] = transmission[i*transmissionLength+11];
 			}
 		}
 	}
@@ -154,7 +155,7 @@ void Market::printMarket(){
 	cout << "mates: ";
 	printVector(mates);
 
-	cout << "time: ";
+	cout << "times: ";
 	printVector(times);
 
 }

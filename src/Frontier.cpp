@@ -12,8 +12,8 @@ Frontier::Frontier(vector<Point> q) {
 	projection.y = -1;
 	projectionDistance = 5;
 
-	centroid.x = -1;
-	centroid.y = -1;
+	center.x = -1;
+	center.y = -1;
 
 	orient[0] = -1;
 	orient[1] = -1;
@@ -39,8 +39,8 @@ void Frontier::getCenter(){
 		ty += members[k].y;
 	}
 
-	centroid.x = round(tx / (float)this->members.size());
-	centroid.y = round(ty / (float)this->members.size());
+	center.x = round(tx / (float)this->members.size());
+	center.y = round(ty / (float)this->members.size());
 
 }
 
@@ -57,12 +57,12 @@ void Frontier::getCentroid(Costmap &costmap){
 			minDex = j;
 		}
 	}
-	this->centroid = members[minDex];
+	this->center = members[minDex];
 }
 
 void Frontier::getProjection(){
-	projection.x = centroid.x + round( projectionDistance*orient[0]);
-	projection.y = centroid.y + round( projectionDistance*orient[1]);
+	projection.x = center.x + round( projectionDistance*orient[0]);
+	projection.y = center.y + round( projectionDistance*orient[1]);
 }
 
 void Frontier::getOrientation(Costmap &costmap){

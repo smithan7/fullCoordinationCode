@@ -7,45 +7,210 @@
 
 #include "CostmapCoordination.h"
 
-CostmapCoordination::CostmapCoordination(){
+CostmapCoordination::CostmapCoordination(){}
 
-}
+CostmapCoordination::~CostmapCoordination() {}
 
-void CostmapCoordination::initializeMarket(int nAgents){
-	for(int i=0; i<nAgents; i++){
-		standingBids.push_back(-1);
-		Point t(-1,-1);
-		goalLocations.push_back(t);
+Point CostmapCoordination::marketFrontiers( Costmap &costmap, Point cLoc, Market &market){
+	cerr << "into market frontiers" << endl;
+
+	market.printMarket();
+
+	// update each agents bid assuming they took an optimal step
+	for(size_t i=0; i<market.exploreCosts.size(); i++){
+		market.exploreCosts[i] -= float(market.times[i]);
+	}
+
+	for(size_t i=0; i<frontiers.size(); i++){
+		frontiers[i].reward = 1;
+	}
+
+	// am I closer to any poses in market than the current purchaser?
+	for(size_t i=0; i<market.gLocs.size(); i++){
+		//cerr << "GraphCoordination::marketPoses::A1" << endl;
+		if( i != market.myIndex ){
+			bool flag = false;
+			//cerr << "GraphCoordination::marketPoses::A2" << endl;
+			if( market.gLocs[i].x > 0 && market.gLocs[i].y > 0){ // published gLocs only
+
+				bool stillAFrontier = false;
+				int frontierIndex = -1;
+
+				for(size_t j=0; j<frontiers.size(); j++){ // check if each gLoc is a frontier
+					if(sqrt( pow(market.gLocs[i].x - frontiers[j].center.x, 2) + pow(market.gLocs[i].y - frontiers[j].center.y, 2) ) < 5 ){
+						cerr << "GraphCoordination::marketPoses::" << market.gLocs[i] << " is frontier " << j << endl;
+						stillAFrontier = true;
+						frontierIndex = j;
+						break;
+					}
+				}
+
+
+				if( stillAFrontier ){
+					//cerr << "GraphCoordination::marketPoses::A3" << endl;
+					if(sqrt(pow(cLoc.x - market.gLocs[i].x,2) + pow(cLoc.y - market.gLocs[i].y,2)) <=  market.exploreCosts[i]){
+						//cerr << "GraphCoordination::marketPoses::A4" << endl;
+						if(costmap.aStarDist(market.gLocs[i], cLoc) - market.exploreCosts[i] > 0.1){
+							cerr << "GraphCoordination::marketPoses::I am not A* closer" << endl;
+							flag = true; // I am not a* closer
+						}
+						else if( abs(costmap.aStarDist(market.gLocs[i], cLoc) - market.exploreCosts[i]) > 0.1 && market.myIndex < int(i)){
+							cerr << "GraphCoordination::marketPoses::I am A* equidistant but my index is lower" << endl;
+							flag = true;
+						}
+						else{
+							cerr << "GraphCoordination::marketPoses::I am A* closer" << endl;
+						}
+					}
+					else{ // I am not euclidian closer
+						cerr << "GraphCoordination::marketPoses::I am not euclid closer" << endl;
+						flag = true;
+					}
+					if(flag){ // they are closer, remove all reward from their goals
+						cerr << "GraphCoordination::marketPoses::I am not closer, lose reward for frontier: " << frontierIndex << endl;
+						frontiers[frontierIndex].reward = -1;
+					}
+				}
+
+			}
+		}
+	}
+
+	for(size_t i=0; i<frontiers.size(); i++){
+		cout << market.myIndex << "f.reward[" << i << "]: " << frontiers[i].reward << endl;
+	}
+	//cin.ignore();
+	//
+
+	//cerr << "GraphCoordination::marketPoses::B" << endl;
+
+	float minCost = INFINITY;
+	int minDex = -1;
+
+	vector<bool> trueCost;
+	for(size_t i=0; i<frontiers.size(); i++){
+
+		if( frontiers[i].reward > 0){
+			frontiers[i].cost = sqrt(pow(cLoc.x-frontiers[i].center.x,2) + pow(cLoc.y-frontiers[i].center.y,2) );
+		}
+		else{
+			frontiers[i].cost = INFINITY;
+		}
+		trueCost.push_back( false );
+
+		//cout << "index, location, value, rewards, distance: " << i << ", " << poseGraph.nodeLocations[i] << ", " << poseValue.back() << ", " << poseRewards.back() << ", " << poseDistances.back() << endl;
+
+		if( frontiers[i].cost < minCost){
+			minCost = frontiers[i].cost;
+			minDex = i;
+		}
+	}
+
+
+	for(size_t i=0; i<frontiers.size(); i++){
+		cout <<  market.myIndex << "f.reward/cost/loc[" << i << "]: " << frontiers[i].reward << " / " << frontiers[i].cost << " / " << frontiers[i].center << endl;
+	}
+
+	if(minDex >= 0){
+		//cerr << "GraphCoordination::marketPoses::D" << endl;
+
+		while( true ){ // find best pose
+
+			//cerr << "GraphCoordination::marketPoses::D1: maxPose = " << maxPose << endl;
+			if( trueCost[minDex]){
+				break;
+			}
+			//cerr << "GraphCoordination::marketPoses::D2" << endl;
+
+			frontiers[minDex].cost = costmap.aStarDist(cLoc, frontiers[minDex].center);
+
+			//cerr << "GraphCoordination::marketPoses::D4:poseValue[maxPose]: " << poseValue[maxPose] << endl;
+			trueCost[minDex] = true;
+
+			minCost = frontiers[minDex].cost;
+			for(size_t i=0; i<frontiers.size(); i++){
+				if( frontiers[i].cost < minCost){
+					minCost = frontiers[i].cost;
+					minDex = i;
+				}
+			}
+			//cerr << "GraphCoordination::marketPoses::D5" << endl;
+
+
+			//cout << "maxPose: index, value, rewards, distance: " << maxPose << ", " << poseValue[maxPose] << ", " << poseRewards[maxPose] << ", " << poseDistances[maxPose] << endl;
+		}
+
+		//cerr << "GraphCoordination::marketPoses::gValue: " << poseValue[maxPose] << endl;
+		//cerr << "GraphCoordination::marketPoses::goalPose: " << poseGraph.nodeLocations[maxPose] << endl;
+
+		market.gLocs[market.myIndex] = frontiers[minDex].center;
+		market.exploreCosts[market.myIndex] = frontiers[minDex].cost;
+		cerr << "out of market frontiers with gLoc / cost: " << frontiers[minDex].center << " / " << frontiers[minDex].cost << endl;
+		return frontiers[minDex].center;
+
+		//cerr << "GraphCoordination::marketPoses::Z" << endl;
+	}
+	else{
+		cerr << "out of market frontiers" << endl;
+		return cLoc;
 	}
 }
 
-CostmapCoordination::~CostmapCoordination() {}
+vector<Point> CostmapCoordination::findFrontiers( Costmap &costmap){
+	vector<Point> frntList;
+	// essentially findFrontiers and mark as inferred free
+	for(int i=1; i<costmap.cells.cols-1; i++){
+		for(int j=1; j<costmap.cells.rows-1; j++){
+			bool newFrnt = false;
+			if(costmap.cells.at<short>(j,i) == costmap.obsFree){ // i'm observed
+				if(costmap.cells.at<short>(j+1,i) == costmap.unknown || costmap.cells.at<short>(j+1,i) == costmap.infFree || costmap.cells.at<short>(j+1,i) == costmap.infWall || costmap.cells.at<short>(j+1,i) == costmap.domFree || costmap.cells.at<short>(j+1,i) == costmap.inflatedWall){ //  but one of my nbrs is observed
+					newFrnt = true;
+				}
+				else if(costmap.cells.at<short>(j-1,i) == costmap.unknown || costmap.cells.at<short>(j-1,i) == costmap.infFree || costmap.cells.at<short>(j-1,i) == costmap.infWall || costmap.cells.at<short>(j-1,i) == costmap.domFree || costmap.cells.at<short>(j-1,i) == costmap.inflatedWall){ //  but one of my nbrs is observed
+					newFrnt = true;
+				}
+				else if(costmap.cells.at<short>(j,i+1) == costmap.unknown || costmap.cells.at<short>(j,i+1) == costmap.infFree || costmap.cells.at<short>(j,i+1) == costmap.infWall || costmap.cells.at<short>(j,i+1) == costmap.domFree || costmap.cells.at<short>(j,i+1) == costmap.inflatedWall){ //  but one of my nbrs is observed
+					newFrnt = true;
+				}
+				else if(costmap.cells.at<short>(j,i-1) == costmap.unknown || costmap.cells.at<short>(j,i-1) == costmap.infFree || costmap.cells.at<short>(j,i-1) == costmap.infWall || costmap.cells.at<short>(j,i-1) == costmap.domFree || costmap.cells.at<short>(j,i-1) == costmap.inflatedWall){ //  but one of my nbrs is observed
+					newFrnt = true;
+				}
+			}
+			if(newFrnt){
+				Point a(i,j);
+				frntList.push_back(a);
+			}
+		}
+	}
+	return frntList;
+}
 
 void CostmapCoordination::plotFrontiers(Costmap &costmap, vector<Point> &frontierCells){
 
 	Mat displayPlot= Mat::zeros(costmap.cells.size(), CV_8UC3);
 	for(int i=0; i<costmap.cells.cols; i++){
 		for(int j=0; j<costmap.cells.rows; j++){
-			if(costmap.cells.at<uchar>(i,j) == costmap.obsFree){
-				displayPlot.at<Vec3b>(i,j) = costmap.cObsFree;
+			Point a(i,j);
+			if(costmap.cells.at<short>(a) == costmap.obsFree){
+				displayPlot.at<Vec3b>(a) = costmap.cObsFree;
 			}
-			else if(costmap.cells.at<uchar>(i,j) == costmap.infFree){
-				displayPlot.at<Vec3b>(i,j) = costmap.cInfFree;
+			else if(costmap.cells.at<short>(a) == costmap.infFree){
+				displayPlot.at<Vec3b>(a) = costmap.cInfFree;
 			}
-			else if(costmap.cells.at<uchar>(i,j) == costmap.obsWall){
-				displayPlot.at<Vec3b>(i,j) = costmap.cObsWall;
+			else if(costmap.cells.at<short>(a) == costmap.obsWall){
+				displayPlot.at<Vec3b>(a) = costmap.cObsWall;
 			}
-			else if(costmap.cells.at<uchar>(i,j) == costmap.infWall){
-				displayPlot.at<Vec3b>(i,j) = costmap.cInfWall;
+			else if(costmap.cells.at<short>(a) == costmap.infWall){
+				displayPlot.at<Vec3b>(a) = costmap.cInfWall;
 			}
-			else if(costmap.cells.at<uchar>(i,j) == costmap.inflatedWall){
-				displayPlot.at<Vec3b>(i,j) = costmap.cInfWall;
+			else if(costmap.cells.at<short>(a) == costmap.inflatedWall){
+				displayPlot.at<Vec3b>(a) = costmap.cInfWall;
 			}
-			else if(costmap.cells.at<uchar>(i,j) == costmap.unknown){
-				displayPlot.at<Vec3b>(i,j) = costmap.cUnknown;
+			else if(costmap.cells.at<short>(a) == costmap.unknown){
+				displayPlot.at<Vec3b>(a) = costmap.cUnknown;
 			}
 			else{ // anything else, should never happen
-				displayPlot.at<Vec3b>(i,j) = costmap.cError;
+				displayPlot.at<Vec3b>(a) = costmap.cError;
 			}
 		}
 	}
@@ -53,19 +218,13 @@ void CostmapCoordination::plotFrontiers(Costmap &costmap, vector<Point> &frontie
 	Vec3b red;
 	red[0] = 0;
 	red[1] = 0;
-	red[2] = 255;
+	red[2] = 127;
 	for(size_t i=0; i<frontierCells.size(); i++){
 		displayPlot.at<Vec3b>(frontierCells[i]) = red;
 	}
 
-
 	for(size_t i=0; i<frontiers.size(); i++){
-		circle(displayPlot, frontiers[i].centroid, 1, Scalar(0,0,255), -1, 8);
-
-		char text[2];
-		sprintf(text,"%d", i);
-		putText(displayPlot, text, frontiers[i].centroid, 0, 0.3, Scalar(0,0,255) );
-
+		circle(displayPlot, frontiers[i].center, 1, Scalar(0,0,255), -1, 8);
 	}
 
 	namedWindow("frontiers", WINDOW_NORMAL);
@@ -80,7 +239,7 @@ void CostmapCoordination::findClosestFrontier(Costmap &costmap, Point cLoc, int 
 	vector<float> dists;
 
 	for(size_t i=0; i<frontiers.size(); i++){
-		float dist = costmap.getEuclidianDistance(cLoc, frontiers[i].centroid);
+		float dist = costmap.getEuclidianDistance(cLoc, frontiers[i].center);
 		dists.push_back( dist );
 
 		if(dist < minDist){
@@ -94,7 +253,7 @@ void CostmapCoordination::findClosestFrontier(Costmap &costmap, Point cLoc, int 
 	while(true){
 		// get A* dist of closest
 		if(!aDist[mindex]){
-			dists[mindex] = costmap.aStarDist(cLoc, frontiers[mindex].centroid);
+			dists[mindex] = costmap.aStarDist(cLoc, frontiers[mindex].center);
 			aDist[mindex] = true;
 		}
 		else{
@@ -114,117 +273,13 @@ void CostmapCoordination::findClosestFrontier(Costmap &costmap, Point cLoc, int 
 
 }
 
-void CostmapCoordination::placeMyOrder(Costmap &costmap, Point cLoc, int myIndex){
-
-
-	float minDist = INFINITY;
-	int mindex = -1;
-
-	vector<float> dists;
-
-	for(size_t i=0; i<frontiers.size(); i++){
-		float dist = costmap.getEuclidianDistance(cLoc, frontiers[i].centroid);
-		dists.push_back( dist );
-
-		if(dist < minDist){
-			minDist = dist;
-			mindex = i;
-		}
-	}
-
-	vector<bool> aDist(this->frontiers.size(), false); // have I done A* to this frontier?
-
-	while(true){
-		// get A* dist of closest
-		if(!aDist[mindex]){
-			dists[mindex] = costmap.aStarDist(cLoc, frontiers[mindex].centroid);
-			aDist[mindex] = true;
-		}
-		else{  // if the closest has an A* dist then stop
-			break;
-		}
-
-		minDist = INFINITY;
-		// find closest again
-		for(size_t i=0; i<dists.size(); i++){ // for distances to all frontiers
-			if(dists[i] <= minDist){ // is it the current closest? if not I don't care
-				bool flag = false;
-				for(size_t j=0; j<goalLocations.size(); j++){ // only care about those I can outbid
-					if(j != myIndex && goalLocations[j].x > 0 && goalLocations[j].y > 0){ // don't compete against self and they have a goal
-						if(costmap.getEuclidianDistance(frontiers[i].centroid, goalLocations[j]) < 5){ // is this frontier bid on?
-							flag = true; // say it was bid on
-							if(standingBids[j] < dists[i]){ // am I outbid?
-								dists[i] = INFINITY; // yes, never use this one again
-							}
-							else if(standingBids[j] == dists[i] && myIndex >= j){ // am I tied and they outrank me?
-								dists[i] = INFINITY; // yes, never use this one again
-							}
-							else{ // I am not outbid
-								minDist = dists[i];
-								mindex = i;
-							}
-						}
-					}
-				}
-				if(!flag){ // it wasn't bid on
-					minDist = dists[i];
-					mindex = i;
-				}
-			}
-		}
-	}
-	standingBids[myIndex] = dists[mindex];
-	goalLocations[myIndex] = frontiers[mindex].centroid;
-}
-
-Point CostmapCoordination::marketFrontiers(Costmap &costmap, Point cLoc, int myIndex){
-
-	// find frontiers and cluster them into cells
-	vector<Point> frontierCells = findFrontiers(costmap);
-	clusterFrontiers(frontierCells, costmap);
-
-	placeMyOrder(costmap, cLoc, myIndex);
-
-	//plotFrontiers(costmap, frontierCells);
-
-	return goalLocations[myIndex];
-}
-
-vector<Point> CostmapCoordination::findFrontiers(Costmap &costmap){
-	vector<Point> frontiersList;
-	for(int i=1; i<costmap.cells.cols-1; i++){
-		for(int j=1; j<costmap.cells.rows-1; j++){
-			bool newFrnt = false;
-			if(costmap.cells.at<uchar>(i,j) == costmap.infFree){ // i'm unobserved
-				if(costmap.cells.at<uchar>(i+1,j) == costmap.obsFree){ //  but one of my nbrs is observed
-					newFrnt = true;
-				}
-				else if(costmap.cells.at<uchar>(i-1,j) == costmap.obsFree){ //  but one of my nbrs is observed
-					newFrnt = true;
-				}
-				else if(costmap.cells.at<uchar>(i,j+1) == costmap.obsFree){ //  but one of my nbrs is observed
-					newFrnt = true;
-				}
-				else if(costmap.cells.at<uchar>(i,j-1) == costmap.obsFree){ //  but one of my nbrs is observed
-					newFrnt = true;
-				}
-			}
-			if(newFrnt){
-				Point fT(i,j);
-				frontiersList.push_back(fT);
-			}
-		}
-	}
-	return frontiersList;
-}
-
 void CostmapCoordination::clusterFrontiers(vector<Point >  frntList, Costmap &costmap){
 	// check to see if frnt.centroid is still a Frontier cell, if so keep, else delete
 	for(size_t i=0; i<frontiers.size(); i++){
 		frontiers[i].editFlag = true;
 		bool flag = true;
 		for(size_t j=0; j<frntList.size(); j++){
-			if(frontiers[i].centroid == frntList[j]){
+			if(frontiers[i].center == frntList[j]){
 				flag = false;
 				frntList.erase(frntList.begin()+j);
 			}
@@ -240,7 +295,7 @@ void CostmapCoordination::clusterFrontiers(vector<Point >  frntList, Costmap &co
 	for(size_t i=0; i<frontiers.size(); i++){ // keep checking for new Frontier clusters while there are unclaimed Frontiers
 		vector<Point> q; // current cluster
 		vector<Point> qP; // open set in cluster
-		qP.push_back(frontiers[i].centroid);
+		qP.push_back(frontiers[i].center);
 
 		while((int)qP.size() > 0){ // find all nbrs of those in q
 			Point seed = qP[0];

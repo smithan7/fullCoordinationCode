@@ -7,7 +7,7 @@
 
 #include "Observer.h"
 
-Observer::Observer(Point cLoc, int nAgents, bool global, String name, int myIndex){
+Observer::Observer(Point cLoc, int nAgents, bool global, String name, int myIndex, bool enableRelaySacrifice){
 	this->cLoc = cLoc;
 	this->nAgents = nAgents;
 	globalObserver = global;
@@ -17,7 +17,7 @@ Observer::Observer(Point cLoc, int nAgents, bool global, String name, int myInde
 		agentColors.push_back( setAgentColor(i) );
 	}
 
-	market.init( nAgents, myIndex );
+	market.init( nAgents, myIndex, enableRelaySacrifice);
 }
 
 Observer::~Observer(){}

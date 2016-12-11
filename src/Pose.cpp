@@ -7,14 +7,22 @@
 
 #include "Pose.h"
 
-Pose::Pose(Point loc, Costmap &costmap, float radius, int nSamples) {
-	this->loc = loc;
-	this->needInference = true;
+Pose::Pose(Point ploc, Costmap &costmap) {
+	loc = ploc;
+	needInference = false;
 
-	initPose(costmap, radius, nSamples);
+	radius = 10;
+	nSamples = 36;
+
+	mean = -1;
+	stanDev = -1;
+
+	initPose(costmap);
+
+	cerr << "loc: " << loc << endl;
 }
 
-void Pose::initPose(Costmap &costmap, float radius, int nSamples){
+void Pose::initPose(Costmap &costmap){
 
 	Mat ta = Mat::zeros(costmap.cells.size(), CV_8UC1);
 
@@ -26,10 +34,17 @@ void Pose::initPose(Costmap &costmap, float radius, int nSamples){
 		LineIterator it(ta, loc, p, 4, false);
 		for(int i=0; i<it.count; i++, ++it){
 			Point pp  = it.pos();
-			if(costmap.cells.at<short>(pp) > costmap.infFree){ // detect if a cell is infFree
+
+			int ppVal = costmap.cells.at<short>(pp);
+
+			if( ppVal == costmap.infWall || ppVal == costmap.inflatedWall || ppVal == costmap.infFree ){
+				this->needInference = true;
+			}
+
+			if(ppVal > costmap.infFree){ // detect if a cell is infFree
 				this->obsLim.push_back( Point(pp.x-loc.x, pp.y-loc.y) ); // record position of end pt relative to center
 				this->obsLen.push_back( sqrt( pow(loc.x - pp.x,2) + pow(loc.y - pp.y,2)) ); // record lengths
-				this->obsVal.push_back( costmap.cells.at<short>(pp));
+				this->obsVal.push_back( ppVal );
 				break;
 			}
 
@@ -40,10 +55,6 @@ void Pose::initPose(Costmap &costmap, float radius, int nSamples){
 			}
 		}
 	}
-
-	// recenter loc to (0,0)
-	loc.x = 0;
-	loc.y = 0;
 
 	getMean();
 	getStanDev();

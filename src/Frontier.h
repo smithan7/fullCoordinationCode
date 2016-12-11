@@ -27,7 +27,6 @@ public:
 	virtual ~Frontier();
 
 	float orient[2]; // unit vector descirbing orientation
-	Point centroid; // [x/y]
 	Point center; // [x,y]
 	Point projection; // [x/y]
 	float projectionDistance;

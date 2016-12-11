@@ -14,7 +14,7 @@
 
 class Observer {
 public:
-	Observer(Point cLoc, int nAgents, bool global, String name, int myIndex);
+	Observer(Point cLoc, int nAgents, bool global, String name, int myIndex, bool enableRelaySacrifice);
 	virtual ~Observer();
 
 	bool globalObserver;

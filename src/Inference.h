@@ -21,6 +21,7 @@
 #include "Graph.h"
 #include "Pose.h"
 
+
 using namespace std;
 using namespace cv;
 
@@ -28,6 +29,7 @@ class Inference {
 public:
 	Inference();
 	virtual ~Inference();
+	void init( float obsRadius );
 
 	// usfeul stuff
 	int minContourToInfer;
@@ -43,8 +45,9 @@ public:
 
 
 	// visual inference
-	void visualInferenceOnFreeSpace( Costmap &costmap, Graph &graph, Mat &visInfMat );
+	void visualInferenceOnFreeSpace( Costmap &costmap, Graph &graph, Mat &visInfMat);
 	void visualInferenceOnObstacleContours( Costmap &costmap, Mat &visInfMat );
+	Pose visualInferenceGetPose( Costmap &costmap, Point iLoc);
 	// calc the matching of two histograms, full rotation
 	float calcVisualFit(Pose &po, Pose &pl, Costmap &costmap, int &iter);
 	// calculate the reward of two aligned scans
@@ -53,6 +56,7 @@ public:
 	void addToVisualLibrary(Pose &pose);
 	void testPoseAgainstLibrary(Pose &oPose);
 	void drawHistogram(vector<float> histogram, char* title);
+	void simulateObservation( Point pose, Mat &resultingView, Costmap &costmap );
 	vector<Pose> visualLibrary;
 
 

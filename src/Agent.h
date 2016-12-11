@@ -37,7 +37,7 @@ class Agent{
 public:
 
 	// agent stuff
-	Agent(Point sLoc, int myIndex, float batteryInit, float obsThresh, float comThresh, int numAgents, int reportInterval);
+	Agent(Point sLoc, int myIndex, float batteryInit, float obsThresh, float comThresh, int numAgents, int reportInterval, bool enableRelaySacrifice);
 	void pickMyColor();
 	~Agent();
 
