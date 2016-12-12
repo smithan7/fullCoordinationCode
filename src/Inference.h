@@ -58,7 +58,7 @@ public:
 	void drawHistogram(vector<float> histogram, char* title);
 	void simulateObservation( Point pose, Mat &resultingView, Costmap &costmap );
 	vector<Pose> visualLibrary;
-
+	vector<Point> posePerim; // for simulating pose views
 
 	// wall inflation
 	int wallInflationDistance;

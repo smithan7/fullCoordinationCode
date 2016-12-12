@@ -23,26 +23,40 @@ class Pose {
 public:
 	Pose(Point loc, Costmap &costmap);
 	virtual ~Pose();
-	void initPose(Costmap &costmap);
-	void makeMat();
-	void addToMat(Mat &matIn);
+	void getPoseHistogram(Costmap &costmap);
 
+
+	// location in mat
 	Point loc;
-	Mat mat;
+
+	// for setting up the histogram
+	float radius;
+	int nSamples;
+
+	// for histogram comparison
 	vector<Point> obsLim;
 	vector<float> obsLen;
 	vector<int> obsVal;
-	bool needInference;
 	float mean;
 	float stanDev;
 
-	float radius;
-	int nSamples;
+	// is it a library or one to be inferred over?
+	bool needInference;
+
+	// is a library, get mat
+	vector<Point> obsWalls, obsFree;
+	void getObservedCells(Costmap &costmap);
+	Mat makeMat();
+	void addToMat(Mat &matIn);
+
+	void mergeInferenceToPt(Point pt, Costmap &costmap, int maxOrient, Mat &matOut);
+
 
 	void getMean();
 	void getStanDev();
 	float getPDF( float x );
 	float getCDF( float x );
+	void drawHistogram(char* title);
 
 };
 

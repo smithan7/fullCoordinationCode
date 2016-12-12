@@ -27,7 +27,6 @@ CPP_SRCS += \
 ../src/SearchPlan.cpp \
 ../src/ThinGraph.cpp \
 ../src/TreeNode.cpp \
-../src/VisualInferencePose.cpp \
 ../src/World.cpp \
 ../src/main_coordination.cpp 
 
@@ -55,7 +54,6 @@ OBJS += \
 ./src/SearchPlan.o \
 ./src/ThinGraph.o \
 ./src/TreeNode.o \
-./src/VisualInferencePose.o \
 ./src/World.o \
 ./src/main_coordination.o 
 
@@ -83,7 +81,6 @@ CPP_DEPS += \
 ./src/SearchPlan.d \
 ./src/ThinGraph.d \
 ./src/TreeNode.d \
-./src/VisualInferencePose.d \
 ./src/World.d \
 ./src/main_coordination.d 
 
