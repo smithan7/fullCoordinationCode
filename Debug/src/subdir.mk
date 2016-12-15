@@ -22,7 +22,6 @@ CPP_SRCS += \
 ../src/Observer.cpp \
 ../src/PRMGraph.cpp \
 ../src/Pose.cpp \
-../src/PoseCoordination.cpp \
 ../src/RoomTemplate.cpp \
 ../src/SearchPlan.cpp \
 ../src/ThinGraph.cpp \
@@ -49,7 +48,6 @@ OBJS += \
 ./src/Observer.o \
 ./src/PRMGraph.o \
 ./src/Pose.o \
-./src/PoseCoordination.o \
 ./src/RoomTemplate.o \
 ./src/SearchPlan.o \
 ./src/ThinGraph.o \
@@ -76,7 +74,6 @@ CPP_DEPS += \
 ./src/Observer.d \
 ./src/PRMGraph.d \
 ./src/Pose.d \
-./src/PoseCoordination.d \
 ./src/RoomTemplate.d \
 ./src/SearchPlan.d \
 ./src/ThinGraph.d \

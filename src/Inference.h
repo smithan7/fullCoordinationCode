@@ -11,6 +11,8 @@
 #include "opencv2/core/core.hpp"
 #include "opencv2/imgproc/imgproc.hpp"
 #include "opencv2/highgui/highgui.hpp"
+#include "opencv2/calib3d/calib3d.hpp"
+
 #include <vector>
 
 #include "BuildingTemplate.h"
@@ -41,29 +43,37 @@ public:
 	void makeGeometricInference(Costmap &costmap);
 	void makeNaiveInference( Costmap &costmap);
 	void makeStructuralInference(Costmap &costmap);
-	void makeVisualInference(Costmap &costmap, Graph &graph);
+	void makeVisualInference(Costmap &costmap);
 
+
+	void geometricInference(Costmap &costmap);
+	void geometricInference(Costmap &costmap, Mat &geoInf);
 
 	// visual inference
-	void visualInferenceOnFreeSpace( Costmap &costmap, Graph &graph, Mat &visInfMat);
-	void visualInferenceOnObstacleContours( Costmap &costmap, Mat &visInfMat );
+	void visualInference( Costmap &costmap, Mat &visInfMat);
 	Pose visualInferenceGetPose( Costmap &costmap, Point iLoc);
+	void buildVisualInferenceLibrary(World &world);
 	// calc the matching of two histograms, full rotation
-	float calcVisualFit(Pose &po, Pose &pl, Costmap &costmap, int &iter);
+	float calcVisualFit(Pose &po, Pose &pl, Costmap &costmap, int &orient, float maxCost);
+	float visualReward(Pose &obs, Pose &lib, int obsI, int libI, Costmap &costmap);
+	void displayVisInfMat(Costmap &costmap);
+	void mergeVisualInferenceProbability( Costmap &costmap, Mat &visualInferenceMat, Mat &geoInfMat );
+	void trimCandidatePoses( vector<Pose> &candidatePoses, vector<Point2f> &candidateLocs);
+
 	// calculate the reward of two aligned scans
-	float visualReward(Costmap &costmap, float dist, Point &obsPt, Point &libPt);
-	float visualReward2(Pose &obs, Pose &lib, int obsI, int libI, Costmap &costmap);
+
 	void addToVisualLibrary(Pose &pose);
-	void testPoseAgainstLibrary(Pose &oPose);
 	void drawHistogram(vector<float> histogram, char* title);
 	void simulateObservation( Point pose, Mat &resultingView, Costmap &costmap );
-	vector<Pose> visualLibrary;
-	vector<Point> posePerim; // for simulating pose views
+	int getVisualLibraryIndex( Pose &pose );
+	vector<vector<Pose> > visualLibrary;
+	vector<Pose> libraryCenters;
+	Mat visInfMat;
 
 	// wall inflation
 	int wallInflationDistance;
 	int freeInflationDistance;
-	void inflateWalls(Costmap &costmap);
+	void inflateWalls(Costmap &costmap, int = 3);
 	bool checkForInflation(Mat &costMat, int i, int j, int dist, int val);
 
 	// frontier exits

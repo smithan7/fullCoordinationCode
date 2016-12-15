@@ -27,18 +27,23 @@ public:
 
 
 	// location in mat
-	Point loc;
+	Point2f loc;
 
 	// for setting up the histogram
 	float radius;
 	int nSamples;
 
 	// for histogram comparison
-	vector<Point> obsLim;
+	float reward;
+	vector<Point2f> obsLim;
 	vector<float> obsLen;
 	vector<int> obsVal;
 	float mean;
 	float stanDev;
+
+	// for map merging
+	int orient, direction;
+	vector<Point2f> rotLim;
 
 	// is it a library or one to be inferred over?
 	bool needInference;
@@ -47,10 +52,9 @@ public:
 	vector<Point> obsWalls, obsFree;
 	void getObservedCells(Costmap &costmap);
 	Mat makeMat();
-	void addToMat(Mat &matIn);
 
-	void mergeInferenceToPt(Point pt, Costmap &costmap, int maxOrient, Mat &matOut);
-
+	void insertPoseInCostmap(Costmap &costmap, Point2f oLoc, Mat &mat);
+	void rotateLimits();
 
 	void getMean();
 	void getStanDev();

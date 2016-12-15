@@ -13,23 +13,115 @@ Pose::Pose(Point ploc, Costmap &costmap) {
 	loc = ploc;
 	needInference = false;
 
-	radius = 15;
-	nSamples = 36;
+	radius = 50;
+	nSamples = 108;
 
 	mean = -1;
 	stanDev = -1;
 
+	reward = -1;
+
+	orient = -1;
+	direction = -1;
+
 	getPoseHistogram(costmap);
+}
+
+void Pose::rotateLimits(){
+
+	float theta = float(orient)*6.283185307 / float(nSamples);
+
+	rotLim.clear();
+	for(size_t i=0; i<obsLim.size(); i++){
+		float x = float(obsLim[i].x*cos(theta) + float(obsLim[i].y)*sin(theta));
+		float y = float(-obsLim[i].x*sin(theta) + float(obsLim[i].y)*cos(theta));
+		rotLim.push_back( Point( int(x), int(y) ) );
+	}
+}
+
+void Pose::insertPoseInCostmap(Costmap &costmap, Point2f oLoc, Mat &mat){
+
+	Point2f p;
+	for(size_t i=0; i<rotLim.size(); i++){
+
+		p = rotLim[i]+oLoc; // end point I am aiming at
+
+		LineIterator it(mat, oLoc, p, 4, false);
+		for(int j=0; j<it.count; j++, ++it){
+			Point pp  = it.pos();
+
+			int ppVal = costmap.cells.at<short>(pp);
+
+			if( ppVal == costmap.obsFree){
+				// known to be free, keep moving
+				continue;
+			}
+			else if( ppVal == costmap.obsWall ){
+				// known wall so stop
+				break;
+			}
+			else if( ppVal == costmap.infWall || ppVal == costmap.inflatedWall ){
+				// previously inferred its a wall, do I now think it's a wall or free?
+				if(j+1 >= it.count){ // didn't hit a wall
+					if(this->obsVal[i] == costmap.obsFree){
+						mat.at<Vec3b>(pp) = costmap.cInfFree;
+					}
+					else{
+						mat.at<Vec3b>(pp) = costmap.cInfWall;
+					}
+					break;
+				}
+				else{
+					mat.at<Vec3b>(pp) = costmap.cInfFree;
+				}
+
+			}
+			else if( ppVal == costmap.infFree ){
+				// previously think it's free, do I now think it's a wall or free?
+				if(j+1 >= it.count){ // didn't hit a wall
+					if(this->obsVal[i] == costmap.obsFree){
+						mat.at<Vec3b>(pp) = costmap.cInfFree;
+					}
+					else{
+						mat.at<Vec3b>(pp) = costmap.cInfWall;
+					}
+					break;
+				}
+				else{
+					mat.at<Vec3b>(pp) = costmap.cInfFree;
+				}
+			}
+			else if( ppVal == costmap.unknown ){
+				// no idea
+				if(j+1 >= it.count){ // didn't hit a wall
+					if(this->obsVal[i] == costmap.obsFree){
+						mat.at<Vec3b>(pp) = costmap.cInfFree;
+					}
+					else{
+						mat.at<Vec3b>(pp) = costmap.cInfWall;
+					}
+					break;
+				}
+				else{
+					mat.at<Vec3b>(pp) = costmap.cInfFree;
+				}
+			}
+			else{
+				mat.at<Vec3b>(pp) = costmap.cInfFree;
+			}
+		}
+	}
+
 }
 
 void Pose::getPoseHistogram(Costmap &costmap){
 
 	Mat ta = Mat::zeros(costmap.cells.size(), CV_8UC1);
 
-	Point p;
+	Point2f p;
 	for(int ns=0; ns<nSamples; ns++){
-		p.x = loc.x + round( radius*cos( 6.28318*ns/nSamples) ); // end point I am aiming at
-		p.y = loc.y + round( radius*sin( 6.28318*ns/nSamples) );
+		p.x = float(loc.x) + radius*cos( 6.283185307*ns/nSamples); // end point I am aiming at
+		p.y = float(loc.y) + radius*sin( 6.283185307*ns/nSamples);
 
 		LineIterator it(ta, loc, p, 4, false);
 		for(int i=0; i<it.count; i++, ++it){
@@ -37,18 +129,18 @@ void Pose::getPoseHistogram(Costmap &costmap){
 
 			int ppVal = costmap.cells.at<short>(pp);
 
-			if( ppVal == costmap.infWall || ppVal == costmap.inflatedWall || ppVal == costmap.infFree || ppVal == costmap.domFree ){
+			if( ppVal == costmap.infWall || ppVal == costmap.inflatedWall || ppVal == costmap.infFree || ppVal == costmap.domFree || ppVal == costmap.unknown){
 				this->needInference = true;
 			}
 
-			if(ppVal > costmap.infFree){ // detect if a cell is not free
+			if(ppVal > costmap.infFree){ // detect if hit a wall
 				this->obsLim.push_back( Point(pp.x-loc.x, pp.y-loc.y) ); // record position of end pt relative to center
 				this->obsLen.push_back( sqrt( pow(loc.x - pp.x,2) + pow(loc.y - pp.y,2)) ); // record lengths
 				this->obsVal.push_back( ppVal );
 				break;
 			}
 
-			if(i+1 >= it.count){ // didn't hit a wall
+			if(i+1 >= it.count){ // didn't hit a wall, but about to end
 				this->obsLim.push_back( Point(p.x-loc.x, p.y-loc.y) ); // record position of end pt relative to center
 				this->obsLen.push_back( radius ); // record lengths
 				this->obsVal.push_back( costmap.cells.at<short>(pp));
@@ -60,45 +152,25 @@ void Pose::getPoseHistogram(Costmap &costmap){
 }
 
 
-
-void Pose::mergeInferenceToPt(Point pt, Costmap &costmap, int maxOrient, Mat &matOut){
-
-	if( this->obsWalls.size() == 0){ // have I not been evaluated before?
-		this->getObservedCells( costmap );
-	}
-
-	//
-	for(size_t i=0; i<this->obsWalls.size(); i++){
-		Point a(pt.x + this->obsWalls[i].x, pt.y + this->obsWalls[i].y);
-		if(matOut.at<Vec3b>(a) == costmap.cUnknown){
-			matOut.at<Vec3b>(a) = costmap.cInfWall;
-		}
-	}
-
-	for(size_t i=0; i<this->obsFree.size(); i++){
-		Point a(pt.x + this->obsFree[i].x, pt.y + this->obsFree[i].y);
-		if(matOut.at<Vec3b>(a) == costmap.cUnknown){
-			matOut.at<Vec3b>(a) = costmap.cInfFree;
-		}
-	}
-}
-
-
 void Pose::getObservedCells(Costmap &costmap){
 
 	obsWalls.clear();
 	obsFree.clear();
 
+	vector<Point> allPts;
+
 	Mat ta = Mat::ones(costmap.cells.size(), CV_8UC1)*127;
 
 	Point p;
-	for(int ns=0; ns<nSamples*5; ns++){
-		p.x = loc.x + round( radius*cos( 6.28318*ns/(5*nSamples)) ); // end point I am aiming at
-		p.y = loc.y + round( radius*sin( 6.28318*ns/(5*nSamples)) );
+	for(int ns=0; ns<nSamples; ns++){
+		p.x = loc.x + round( radius*cos( 6.283185307*ns/(nSamples)) ); // end point I am aiming at
+		p.y = loc.y + round( radius*sin( 6.283185307*ns/(nSamples)) );
 
 		LineIterator it(ta, loc, p, 4, false);
 		for(int i=0; i<it.count; i++, ++it){
 			Point pp  = it.pos();
+
+			allPts.push_back(pp);
 
 			int ppVal = costmap.cells.at<short>(pp);
 
@@ -119,12 +191,7 @@ void Pose::getObservedCells(Costmap &costmap){
 			}
 		}
 	}
-
-	namedWindow("obs Walls1", WINDOW_NORMAL);
-	imshow("obs Walls1", ta);
-	waitKey(1  );
 }
-
 
 Mat Pose::makeMat(){
 
@@ -240,7 +307,6 @@ void Pose::drawHistogram(char* title){
 	waitKey(1);
 }
 
-
 void Pose::getMean(){
 
 	float sum = 0;
@@ -275,42 +341,6 @@ float Pose::getCDF( float x ){
     float z = (x- mean) / stanDev;
     float pi = 3.14159265358979323846264338327950288419716939937510582;
     return 1 / (1+exp(-sqrt(pi)*(-0.0004406*pow(z,5) + 0.0418198*pow(z,3) + 0.9*z) ) );
-}
-
-
-
-void Pose::addToMat(Mat &matIn){
-
-	// find min and max x/y vals
-	int minx = 1000;
-	int miny = 1000;
-	int maxx = -1000;
-	int maxy = -1000;
-	for(size_t i=0; i<obsLim.size(); i++){
-		if(obsLim[i].x > maxx){
-			maxx = obsLim[i].x;
-		}
-		else if(obsLim[i].x < minx){
-			minx = obsLim[i].x;
-		}
-
-		if(obsLim[i].y > maxy){
-			maxy = obsLim[i].y;
-		}
-		else if(obsLim[i].y < miny){
-			miny = obsLim[i].y;
-		}
-	}
-
-	for(size_t i=0; i<obsLim.size(); i++){
-		Point t(obsLim[i].x + 5 - minx, obsLim[i].y + 5 -  miny);
-		if( t.x < matIn.cols && t.y < matIn.rows){
-			matIn.at<uchar>(t) = 127;
-		}
-	}
-
-
-
 }
 
 Pose::~Pose() {}

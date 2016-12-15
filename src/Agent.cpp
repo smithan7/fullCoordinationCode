@@ -385,8 +385,6 @@ void Agent::planExplore(string planMethod ){
 		graphCoordination.findPosesEvolution( costmap );		//cout << "out" << endl;
 		//cout << "Agent::act::found graphPoses with " << this->graphCoordination.poseGraph.nodeLocations.size() << " nodes" << endl;
 
-		this->inference.makeVisualInference(costmap, graphCoordination.thinGraph);
-
 		if(graphCoordination.poseGraph.nodeLocations.size() < 1){
 			//cout << "PoseGraph.size() == 0" << endl;
 			gLoc = costmapPlanning.explorePlanner(costmap, cLoc);

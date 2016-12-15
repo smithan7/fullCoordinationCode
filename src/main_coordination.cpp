@@ -43,10 +43,10 @@ int main(){
 	srand( time(NULL) );
 	bool videoFlag = true;
 
-	int numAgents = 2;
+	int numAgents = 1;
 	int numIterations = 1;
 
-	int gSpace = 4;
+	int gSpace = 5;
 	float obsThresh = 50;
 	float comThresh = 100;
 	int maxTime = 500;
@@ -56,8 +56,8 @@ int main(){
 
 	vector<string> fName;
 	//fName.push_back("mineMap");
-	fName.push_back("mineMap2");
-	//fName.push_back("gmapping");
+	//fName.push_back("mineMap2");
+	fName.push_back("gmapping");
 	//fName.push_back("tunnelTest");
 	//loadMapNames(fName);
 
@@ -73,9 +73,10 @@ int main(){
 
 	vector<string> inferenceMethod;
 	//inferenceMethod.push_back("naive");
-	inferenceMethod.push_back("geometric");
+	//inferenceMethod.push_back("geometric");
 	//inferenceMethod.push_back("structural");
 	//inferenceMethod.push_back("global");
+	inferenceMethod.push_back("visual");
 
 	srand( time(NULL) );
 	// create world
@@ -180,16 +181,24 @@ int main(){
 				}
 				cout << "Main::Out of communicate with other agents" << endl;
 
-				humanObserver.inference.makeInference( inferenceMethod[0], humanObserver.costmap, world);
+				cout << "Main::Into inference" << endl;
+				if(humanObserver.inference.visualLibrary.size() == 0){
+					humanObserver.inference.buildVisualInferenceLibrary( world );
+				}
+
+				//humanObserver.inference.makeInference( inferenceMethod[0], humanObserver.costmap, world);
 				humanObserver.showCellsPlot();
 				globalObserver.inference.makeInference( "global", globalObserver.costmap, world );
 				globalObserver.showCellsPlot();
 
-				cout << "Main::Into inference" << endl;
 				// all agents plan for one timestep
 				for(int i=0; i<numAgents; i++){
+					if( agents[i].inference.visualLibrary.size() == 0){
+						agents[i].inference.buildVisualInferenceLibrary( world );
+					}
 					agents[i].infer( inferenceMethod[0], world); // includes updating internal cLoc
 				}
+				cout << "Main::out of inference" << endl;
 
 				cout << "Main::Into plan for one timestep" << endl;
 				// all agents plan for one timestep
