@@ -459,7 +459,7 @@ void GraphCoordination::simulateObservation(Point pose, Mat &resultingView, Cost
 
 			Point pp  = it.pos();
 
-			if(costmap.cells.at<short>(pp) > costmap.domFree){
+			if(costmap.cells.at<short>(pp) > costmap.unknown){
 				break;
 			}
 			else{// if(costmap.cells.at<short>(x0, y0) == costmap.infFree){

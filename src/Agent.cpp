@@ -360,8 +360,13 @@ void Agent::planExplore(string planMethod ){
 
 		vector<Point> frntList = costmapCoordination.findFrontiers( costmap );
 		costmapCoordination.clusterFrontiers( frntList, costmap);
-		costmapCoordination.plotFrontiers( costmap, frntList );
-		gLoc = costmapCoordination.marketFrontiers(costmap, cLoc, market);
+		if(costmapCoordination.frontiers.size() > 0){
+			//costmapCoordination.plotFrontiers( costmap, frntList );
+			gLoc = costmapCoordination.marketFrontiers(costmap, cLoc, market);
+		}
+		else{
+			gLoc = oLoc;
+		}
 		//waitKey(0);
 	}
 	else if(planMethod.compare("selectPose") == 0){
@@ -447,10 +452,11 @@ void Agent::act(){
 		cLoc = myPath[1];
 		myPath.erase(myPath.begin());
 	}
-
+	/*
 	cout << "Agent[" << myIndex << "]::act::cLoc / gLoc / reportCntr / batteryLeft / returnTime: " << cLoc << " / " << gLoc << " / " << reportCntr << " / " << batteryLeft << " / " << returnTime << endl;
 	cout << "Agent[" << myIndex << "]::act::reportFlag / returnFlag: " << reportFlag << " / " << returnFlag << endl;
 	cout << "Agent[" << myIndex << "]::act::relayFlag / sacrificeFlag: " << relayFlag << " / " << sacrificeFlag << endl;
+	*/
 	if( relayFlag || sacrificeFlag ){
 		cout << "Agent[" << myIndex << "]::act::rLoc / oLoc: " << rLoc << " / " << oLoc << endl;
 	}

@@ -21,7 +21,9 @@ using namespace cv;
 
 class Pose {
 public:
+	Pose();
 	Pose(Point loc, Costmap &costmap);
+	Pose(vector<float> mObsLen, vector<Point2f> mObsLim, vector<int> mObsVal, float mMean, float mStd);
 	virtual ~Pose();
 	void getPoseHistogram(Costmap &costmap);
 

@@ -74,7 +74,7 @@ public:
 	Mat displayPlot;
 	void buildCellsPlot(); // build nice display plot
 	void buildOccPlot(); // build nice display plot
-	void showCostmapPlot(int index); // show nice display plot and number it
+	//void showCostmapPlot(int index); // show nice display plot and number it
 	void addAgentToPlot(Scalar color, vector<Point> myPath, Point cLoc);
 
 	Mat createCostMat(); // Largely used for inference

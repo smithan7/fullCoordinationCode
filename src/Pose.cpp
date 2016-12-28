@@ -27,6 +27,41 @@ Pose::Pose(Point ploc, Costmap &costmap) {
 	getPoseHistogram(costmap);
 }
 
+Pose::Pose(vector<float> mObsLen, vector<Point2f> mObsLim, vector<int> mObsVal, float mMean, float mStd){
+	loc = Point(-1,-1);
+	needInference = false;
+
+	radius = 50;
+	nSamples = 108;
+
+	mean = mMean;
+	stanDev = mStd;
+
+	reward = -1;
+	orient = -1;
+	direction = -1;
+
+	obsLim = mObsLim;
+	obsLen = mObsLen;
+	obsVal = mObsVal;
+}
+
+Pose::Pose(){
+	loc = Point(-1,-1);
+	needInference = false;
+
+	radius = 50;
+	nSamples = 108;
+
+	mean = -1;
+	stanDev = -1;
+
+	reward = -1;
+
+	orient = -1;
+	direction = -1;
+}
+
 void Pose::rotateLimits(){
 
 	float theta = float(orient)*6.283185307 / float(nSamples);
@@ -60,7 +95,7 @@ void Pose::insertPoseInCostmap(Costmap &costmap, Point2f oLoc, Mat &mat){
 				// known wall so stop
 				break;
 			}
-			else if( ppVal == costmap.infWall || ppVal == costmap.inflatedWall ){
+			else if( ppVal == costmap.infWall ){
 				// previously inferred its a wall, do I now think it's a wall or free?
 				if(j+1 >= it.count){ // didn't hit a wall
 					if(this->obsVal[i] == costmap.obsFree){
@@ -133,7 +168,7 @@ void Pose::getPoseHistogram(Costmap &costmap){
 				this->needInference = true;
 			}
 
-			if(ppVal > costmap.infFree){ // detect if hit a wall
+			if(ppVal > costmap.unknown){ // detect if hit a wall
 				this->obsLim.push_back( Point(pp.x-loc.x, pp.y-loc.y) ); // record position of end pt relative to center
 				this->obsLen.push_back( sqrt( pow(loc.x - pp.x,2) + pow(loc.y - pp.y,2)) ); // record lengths
 				this->obsVal.push_back( ppVal );

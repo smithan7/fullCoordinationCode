@@ -12,9 +12,7 @@ CostmapCoordination::CostmapCoordination(){}
 CostmapCoordination::~CostmapCoordination() {}
 
 Point CostmapCoordination::marketFrontiers( Costmap &costmap, Point cLoc, Market &market){
-	cerr << "into market frontiers" << endl;
-
-	market.printMarket();
+	//market.printMarket();
 
 	// update each agents bid assuming they took an optimal step
 	for(size_t i=0; i<market.exploreCosts.size(); i++){
@@ -38,7 +36,6 @@ Point CostmapCoordination::marketFrontiers( Costmap &costmap, Point cLoc, Market
 
 				for(size_t j=0; j<frontiers.size(); j++){ // check if each gLoc is a frontier
 					if(sqrt( pow(market.gLocs[i].x - frontiers[j].center.x, 2) + pow(market.gLocs[i].y - frontiers[j].center.y, 2) ) < 5 ){
-						cerr << "GraphCoordination::marketPoses::" << market.gLocs[i] << " is frontier " << j << endl;
 						stillAFrontier = true;
 						frontierIndex = j;
 						break;
@@ -51,23 +48,16 @@ Point CostmapCoordination::marketFrontiers( Costmap &costmap, Point cLoc, Market
 					if(sqrt(pow(cLoc.x - market.gLocs[i].x,2) + pow(cLoc.y - market.gLocs[i].y,2)) <=  market.exploreCosts[i]){
 						//cerr << "GraphCoordination::marketPoses::A4" << endl;
 						if(costmap.aStarDist(market.gLocs[i], cLoc) - market.exploreCosts[i] > 0.1){
-							cerr << "GraphCoordination::marketPoses::I am not A* closer" << endl;
 							flag = true; // I am not a* closer
 						}
 						else if( abs(costmap.aStarDist(market.gLocs[i], cLoc) - market.exploreCosts[i]) > 0.1 && market.myIndex < int(i)){
-							cerr << "GraphCoordination::marketPoses::I am A* equidistant but my index is lower" << endl;
 							flag = true;
-						}
-						else{
-							cerr << "GraphCoordination::marketPoses::I am A* closer" << endl;
 						}
 					}
 					else{ // I am not euclidian closer
-						cerr << "GraphCoordination::marketPoses::I am not euclid closer" << endl;
 						flag = true;
 					}
 					if(flag){ // they are closer, remove all reward from their goals
-						cerr << "GraphCoordination::marketPoses::I am not closer, lose reward for frontier: " << frontierIndex << endl;
 						frontiers[frontierIndex].reward = -1;
 					}
 				}
@@ -76,9 +66,11 @@ Point CostmapCoordination::marketFrontiers( Costmap &costmap, Point cLoc, Market
 		}
 	}
 
+	/*
 	for(size_t i=0; i<frontiers.size(); i++){
 		cout << market.myIndex << "f.reward[" << i << "]: " << frontiers[i].reward << endl;
 	}
+	*/
 	//cin.ignore();
 	//
 
@@ -106,10 +98,11 @@ Point CostmapCoordination::marketFrontiers( Costmap &costmap, Point cLoc, Market
 		}
 	}
 
-
+	/*
 	for(size_t i=0; i<frontiers.size(); i++){
 		cout <<  market.myIndex << "f.reward/cost/loc[" << i << "]: " << frontiers[i].reward << " / " << frontiers[i].cost << " / " << frontiers[i].center << endl;
 	}
+	*/
 
 	if(minDex >= 0){
 		//cerr << "GraphCoordination::marketPoses::D" << endl;
@@ -145,13 +138,11 @@ Point CostmapCoordination::marketFrontiers( Costmap &costmap, Point cLoc, Market
 
 		market.gLocs[market.myIndex] = frontiers[minDex].center;
 		market.exploreCosts[market.myIndex] = frontiers[minDex].cost;
-		cerr << "out of market frontiers with gLoc / cost: " << frontiers[minDex].center << " / " << frontiers[minDex].cost << endl;
 		return frontiers[minDex].center;
 
 		//cerr << "GraphCoordination::marketPoses::Z" << endl;
 	}
 	else{
-		cerr << "out of market frontiers" << endl;
 		return cLoc;
 	}
 }
@@ -224,7 +215,11 @@ void CostmapCoordination::plotFrontiers(Costmap &costmap, vector<Point> &frontie
 	}
 
 	for(size_t i=0; i<frontiers.size(); i++){
+		frontiers[i].getOrientation( costmap );
+		frontiers[i].getProjection();
 		circle(displayPlot, frontiers[i].center, 1, Scalar(0,0,255), -1, 8);
+		circle(displayPlot, frontiers[i].projection, 1, Scalar(0,255,0), -1, 8);
+		//cout << "orient: " << frontiers[i].orient[0] << "< " << frontiers[i].orient[1] << endl;
 	}
 
 	namedWindow("frontiers", WINDOW_NORMAL);
@@ -337,8 +332,10 @@ void CostmapCoordination::clusterFrontiers(vector<Point >  frntList, Costmap &co
 				}
 			}
 		}
-		Frontier a(q);
-		this->frontiers.push_back(a);
+		if(q.size() > 3){
+			Frontier a(q);
+			this->frontiers.push_back(a);
+		}
 	}
 	for(size_t i=0; i<this->frontiers.size(); i++){ // number of clusters
 		if(this->frontiers[i].editFlag){

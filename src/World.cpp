@@ -14,8 +14,10 @@ World::World(string fName, int resolution, float obsThresh, float comThresh) {
 	this->obsThresh = obsThresh;
 	this->commThresh = comThresh;
 
-	string fileName = fName + ".jpg";
-	Mat image = imread(fileName,1);
+	if(fName.substr(fName.find_last_of(".") + 1) != "jpg") {
+	    fName = fName + ".jpg";
+	}
+	Mat image = imread(fName,1);
 	cvtColor(image,image,CV_BGR2GRAY);
 	threshold(image,image,230,255,THRESH_BINARY);
 
@@ -27,7 +29,7 @@ World::World(string fName, int resolution, float obsThresh, float comThresh) {
 
 	initializeMaps(image, resolution);
 	cout << "world::costmap.cells.size(): " << costmap.cells.cols << " x " << costmap.cells.rows << endl;
-	cout << "World::Finished building " << fName << ".yml" << endl;
+	cout << "World::Finished building world: " << fName << endl;
 }
 
 void World::initializeMaps(Mat &imgGray, int resolution){

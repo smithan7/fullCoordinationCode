@@ -61,8 +61,8 @@ void Frontier::getCentroid(Costmap &costmap){
 }
 
 void Frontier::getProjection(){
-	projection.x = center.x + round( projectionDistance*orient[0]);
-	projection.y = center.y + round( projectionDistance*orient[1]);
+	projection.x = center.x - round( projectionDistance*orient[1]);
+	projection.y = center.y - round( projectionDistance*orient[0]);
 }
 
 void Frontier::getOrientation(Costmap &costmap){
@@ -72,21 +72,21 @@ void Frontier::getOrientation(Costmap &costmap){
 	// check each member of each cluster
 	for(size_t j=0; j<this->members.size(); j++){
 		// check 4Nbr for being unobserved
-		int xP = this->members[j].x;
-		int yP = this->members[j].y;
-		if(costmap.cells.at<uchar>(xP+1, yP) != costmap.obsFree && costmap.cells.at<uchar>(xP+1, yP) != costmap.obsWall){
+		int xP = this->members[j].y;
+		int yP = this->members[j].x;
+		if(costmap.cells.at<short>(xP+1, yP) != costmap.obsFree && costmap.cells.at<short>(xP+1, yP) != costmap.obsWall){
 			this->orient[0] += 1;
 			count++;
 		}
-		if(costmap.cells.at<uchar>(xP-1, yP) != costmap.obsFree && costmap.cells.at<uchar>(xP-1, yP) != costmap.obsWall){
+		if(costmap.cells.at<short>(xP-1, yP) != costmap.obsFree && costmap.cells.at<short>(xP-1, yP) != costmap.obsWall){
 			this->orient[0] -= 1;
 			count++;
 		}
-		if(costmap.cells.at<uchar>(xP, yP+1) != costmap.obsFree && costmap.cells.at<uchar>(xP, yP+1) != costmap.obsWall){
+		if(costmap.cells.at<short>(xP, yP+1) != costmap.obsFree && costmap.cells.at<short>(xP, yP+1) != costmap.obsWall){
 			this->orient[1] += 1;
 			count++;
 		}
-		if(costmap.cells.at<uchar>(xP, yP-1) != costmap.obsFree && costmap.cells.at<uchar>(xP, yP-1) != costmap.obsWall){
+		if(costmap.cells.at<short>(xP, yP-1) != costmap.obsFree && costmap.cells.at<short>(xP, yP-1) != costmap.obsWall){
 			this->orient[1] -= 1;
 			count++;
 		}

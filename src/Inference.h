@@ -22,6 +22,7 @@
 #include "Frontier.h"
 #include "Graph.h"
 #include "Pose.h"
+#include "Costmap.h"
 
 
 using namespace std;
@@ -52,7 +53,8 @@ public:
 	// visual inference
 	void visualInference( Costmap &costmap, Mat &visInfMat);
 	Pose visualInferenceGetPose( Costmap &costmap, Point iLoc);
-	void buildVisualInferenceLibrary(World &world);
+	void buildVisualInferenceLibrary(World &world); // helps create library
+	void loadVisualInferenceLibrary(); // brings in library
 	// calc the matching of two histograms, full rotation
 	float calcVisualFit(Pose &po, Pose &pl, Costmap &costmap, int &orient, float maxCost);
 	float visualReward(Pose &obs, Pose &lib, int obsI, int libI, Costmap &costmap);
@@ -68,12 +70,11 @@ public:
 	int getVisualLibraryIndex( Pose &pose );
 	vector<vector<Pose> > visualLibrary;
 	vector<Pose> libraryCenters;
-	Mat visInfMat;
+	Mat visInfMatFree, visInfMatWall, geoInfMat;
 
 	// wall inflation
-	int wallInflationDistance;
-	int freeInflationDistance;
 	void inflateWalls(Costmap &costmap, int = 3);
+	void inflateFree(Costmap &costmap, int inflationSteps);
 	bool checkForInflation(Mat &costMat, int i, int j, int dist, int val);
 
 	// frontier exits

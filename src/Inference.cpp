@@ -23,6 +23,7 @@ void printVector( vector<float> vec, string name );
 float euclidianDistance( Point a, Point b );
 
 Inference::Inference() {
+
 	/*
 	FileStorage fsR("/home/andy/git/fabmap2Test/InferenceLibrary/roomLibrary.yml", FileStorage::READ);
 	fsR["names"] >> roomNameList;
@@ -44,8 +45,6 @@ Inference::Inference() {
 	*/
 
 	minMatchStrength = 100;
-	wallInflationDistance = 2; // must be a wall within n cells to inflate
-	freeInflationDistance = 2; // cannot be an obsFree cell within n cells and inflate
 	minContourToInfer = 100;
 }
 
@@ -79,7 +78,7 @@ void Inference::makeInference(string method, Costmap &costmap, World &world){
 		makeNaiveInference( costmap );
 	}
 	else if(method.compare("visual") == 0){
-		resetInference( costmap );
+		//resetInference( costmap );
 		makeVisualInference( costmap );
 		makeNaiveInference( costmap );
 
@@ -159,9 +158,10 @@ void Inference::buildVisualInferenceLibrary( World &world){
 	// build graph over global inference
 	Graph graph;
 	graph.createThinGraph(costmap, 1,1);
+	cerr << graph.nodeLocations.size() << endl;
+
 
 	// pull libPoses from global inference costmap and graph
-
 	Mat samples(int(graph.nodeLocations.size()), 108, CV_32F);
 
 	vector<Pose> libHolder;
@@ -172,9 +172,48 @@ void Inference::buildVisualInferenceLibrary( World &world){
 			samples.at<float>(infIters,i) = libPose.obsLen[i];
 		}
 	}
+	visualLibrary.push_back( libHolder );
 
+	int index = 0;
 	costmap.buildCellsPlot();
-	int clusterCount = 8;
+	namedWindow("tempMat", WINDOW_NORMAL);
+	imshow("tempMat", costmap.displayPlot);
+	waitKey(1);
+
+}
+
+void Inference::loadVisualInferenceLibrary(){
+
+	FileStorage fsV("/home/andy/git/coordination/InferenceLibrary/visualLibrary.yml", FileStorage::READ);
+
+	vector<vector<float> > masterObsLenList;
+	vector<vector<Point2f> > masterObsLimList;
+	vector<vector<int> > masterObsValList;
+	vector<float> masterMeanLengthList;
+	vector<float> masterStdDevList;
+
+
+	fsV["obsLimList"] >> masterObsLimList;
+	fsV["obsLenList"] >> masterObsLenList;
+	fsV["obsValList"] >>  masterObsValList;
+	fsV["meanLength"] >> masterMeanLengthList;
+	fsV["stdDevList"] >> masterStdDevList;
+	fsV.release();
+
+	// pull libPoses from global inference costmap and graph
+	Mat samples(int(masterMeanLengthList.size()), 108, CV_32F);
+
+	vector<Pose> libHolder;
+	for(int infIters = 0; infIters < masterMeanLengthList.size(); infIters++){
+		Pose libPose( masterObsLenList[infIters], masterObsLimList[infIters], masterObsValList[infIters], masterMeanLengthList[infIters], masterStdDevList[infIters]);; // make it into a pose
+		libHolder.push_back(libPose);
+		for(size_t i=0; i<libPose.obsLen.size(); i++){
+			samples.at<float>(infIters,i) = libPose.obsLen[i];
+		}
+	}
+
+
+	int clusterCount = 10;
 	Mat labels;
 	int attempts = 5;
 	Mat centers;
@@ -202,15 +241,13 @@ void Inference::buildVisualInferenceLibrary( World &world){
 	}
 
 	// get the centers
-	Pose libPose(Point(0,0), costmap);
+	Pose libPose = Pose();
 	for(size_t i=0; i<poseCenters.size(); i++){
 		for(size_t j=0; j<poseCenters[i].size(); j++){
 			poseCenters[i][j] /= float(lCntr[i]);
-			//cout << poseCenters[i][j] << ", ";
 		}
 		libPose.obsLen = poseCenters[i];
 		libraryCenters.push_back( libPose );
-		//cout << endl;
 	}
 
 	// sort into libraries
@@ -223,6 +260,7 @@ void Inference::buildVisualInferenceLibrary( World &world){
 		}
 		visualLibrary.push_back( lh );
 	}
+
 
 	/*
 	// prune libraries
@@ -264,63 +302,91 @@ void Inference::buildVisualInferenceLibrary( World &world){
 
 void Inference::makeVisualInference(Costmap &costmap){
 
-	if(visInfMat.empty() ){
-		visInfMat = Mat::ones(costmap.cells.size(), CV_32FC1) * 0.5;
-		for(int i=0; i<costmap.cells.cols; i++){
-			for(int j=0; j<costmap.cells.rows; j++){
-				Point t(i,j);
-				if( costmap.cells.at<short>(t) == costmap.obsFree){
-					visInfMat.at<float>(t) = 0;
-				}
-				else if( costmap.cells.at<short>(t) == costmap.obsWall){
-					visInfMat.at<float>(t) = 1;
-				}
-			}
-		}
-	}
+	resetInference( costmap );
+	Mat geometricInferenceMat;
+	geometricInference( costmap, geometricInferenceMat );
 
-	Mat geoInfMat;
-	geometricInference( costmap, geoInfMat );
+	/*
+	namedWindow("geometricInferenceMat", WINDOW_NORMAL);
+	imshow("geometricInferenceMat", geometricInferenceMat);
+	waitKey(1);
+	*/
 
 	Mat visualInferenceMat;
 	visualInference( costmap, visualInferenceMat);
 
-	mergeVisualInferenceProbability( costmap, visualInferenceMat, geoInfMat );
+	/*
+	namedWindow("visInferenceMat", WINDOW_NORMAL);
+	imshow("visInferenceMat", visualInferenceMat);
+	waitKey(1);
+	*/
 
-	displayVisInfMat(costmap);
-	namedWindow("visInfMat", WINDOW_NORMAL);
-	imshow("visInfMat", visInfMat);
+	mergeVisualInferenceProbability( costmap, visualInferenceMat, geometricInferenceMat );
+	//add to this a second visual inference mat that is for visual walls. Keep one that is free space and one that is walls, this will kill the behavior that is causing walls to dissapear in the blurring
+
+	/*
+	namedWindow("visInfMatFree", WINDOW_NORMAL);
+	imshow("visInfMatFree", visInfMatFree);
 	waitKey(1);
 
 	namedWindow("geoInfMat", WINDOW_NORMAL);
 	imshow("geoInfMat", geoInfMat);
 	waitKey(1);
+	*/
 
-	inflateWalls(costmap, 1);
 
+
+	inflateWalls(costmap, 3);
+	inflateFree( costmap, 1);
 	removeInaccessibleContoursFromCostmap(costmap);
 
-
-
+	/*
+	displayVisInfMat(costmap);
 	costmap.buildCellsPlot();
 	namedWindow("costmap.displayPlot", WINDOW_NORMAL);
 	imshow("costmap.displayPlot", costmap.displayPlot);
 	waitKey(1);
+	*/
 }
 
-void Inference::mergeVisualInferenceProbability( Costmap &costmap, Mat &visualInferenceMat, Mat &geoInfMat ){
-;
+void Inference::mergeVisualInferenceProbability( Costmap &costmap, Mat &visualInferenceMat, Mat &geometricInferenceMat ){
+
+	if(visInfMatFree.empty() ){
+		visInfMatFree = Mat::ones(costmap.cells.size(), CV_32FC1) * 0.5;
+		visInfMatWall = Mat::ones(costmap.cells.size(), CV_32FC1) * 0.5;
+		geoInfMat = Mat::ones(costmap.cells.size(), CV_32FC1) * 0.5;
+		for(int i=0; i<costmap.cells.cols; i++){
+			for(int j=0; j<costmap.cells.rows; j++){
+				Point t(i,j);
+				if( costmap.cells.at<short>(t) == costmap.obsFree){
+					visInfMatFree.at<float>(t) = 0;
+					visInfMatWall.at<float>(t) = 0.5;
+					geoInfMat.at<float>(t) = 0;
+				}
+				else if( costmap.cells.at<short>(t) == costmap.obsWall){
+					visInfMatFree.at<float>(t) = 0.5;
+					visInfMatWall.at<float>(t) = 1;
+					geoInfMat.at<float>(t) = 1;
+				}
+			}
+		}
+	}
+
 
 	for(int i=0; i<visualInferenceMat.cols; i++){
 		for(int j=0; j<visualInferenceMat.rows; j++){
 			Point t(i,j);
 
 			if( costmap.cells.at<short>(t) == costmap.obsFree){
-				visInfMat.at<float>(t) = 0;
+				visInfMatFree.at<float>(t) = 0;
+				visInfMatWall.at<float>(t) = 0.5;
+				geoInfMat.at<float>(t) = 0;
 				continue;
 			}
 			else if( costmap.cells.at<short>(t) == costmap.obsWall){
-				visInfMat.at<float>(t) = 1;
+				visInfMatFree.at<float>(t) = 0.5;
+				visInfMatWall.at<float>(t) = 1;
+				geoInfMat.at<float>(t) = 1;
 				continue;
 			}
 
@@ -329,45 +395,72 @@ void Inference::mergeVisualInferenceProbability( Costmap &costmap, Mat &visualIn
 
 			bool flag = true;
 			if( visualInferenceMat.at<Vec3b>(t) == costmap.cInfFree){
-				visInfMat.at<float>(t) = visInfMat.at<float>(t)*pFree / (visInfMat.at<float>(t)*pFree + (1-visInfMat.at<float>(t))*(1-pFree) );
+				visInfMatFree.at<float>(t) = visInfMatFree.at<float>(t)*pFree / (visInfMatFree.at<float>(t)*pFree + (1-visInfMatFree.at<float>(t))*(1-pFree) );
 				flag = false;
 			}
 			else if( visualInferenceMat.at<Vec3b>(t) == costmap.cInfWall){
-				visInfMat.at<float>(t) = visInfMat.at<float>(t)*pWall / (visInfMat.at<float>(t)*pWall + (1-visInfMat.at<float>(t))*(1-pWall) );
-				flag = false;
-			}
-
-			pWall = 0.85;
-			pFree = 0.15;
-
-			if( geoInfMat.at<uchar>(t) == costmap.infFree){
-				visInfMat.at<float>(t) = visInfMat.at<float>(t)*pFree / (visInfMat.at<float>(t)*pFree + (1-visInfMat.at<float>(t))*(1-pFree) );
-				flag = false;
-			}
-			else if( geoInfMat.at<uchar>(t) == costmap.infWall){
-				visInfMat.at<float>(t) = visInfMat.at<float>(t)*pWall / (visInfMat.at<float>(t)*pWall + (1-visInfMat.at<float>(t))*(1-pWall) );
+				visInfMatWall.at<float>(t) = visInfMatWall.at<float>(t)*pWall / (visInfMatWall.at<float>(t)*pWall + (1-visInfMatWall.at<float>(t))*(1-pWall) );
 				flag = false;
 			}
 
 			if(flag){
-				if(visInfMat.at<float>(t) > 0.51){
-					visInfMat.at<float>(t) -= 0.025;
+				if(visInfMatWall.at<float>(t) > 0.51){
+					visInfMatWall.at<float>(t) -= 0.01;
 				}
-				else if(visInfMat.at<float>(t) < 0.49){
-					visInfMat.at<float>(t) += 0.025;
+				else if(visInfMatFree.at<float>(t) < 0.49){
+					visInfMatFree.at<float>(t) += 0.0075;
+				}
+
+			}
+
+			flag = true;
+
+			pWall = 0.70;
+			pFree = 0.05;
+
+			if( geometricInferenceMat.at<short>(t) == costmap.infFree){
+				geoInfMat.at<float>(t) = geoInfMat.at<float>(t)*pFree / (geoInfMat.at<float>(t)*pFree + (1-geoInfMat.at<float>(t))*(1-pFree) );
+				flag = false;
+			}
+			else if( geometricInferenceMat.at<short>(t) == costmap.infWall){
+				geoInfMat.at<float>(t) = geoInfMat.at<float>(t)*pWall / (geoInfMat.at<float>(t)*pWall + (1-geoInfMat.at<float>(t))*(1-pWall) );
+				flag = false;
+			}
+			else if( geometricInferenceMat.at<short>(t) == costmap.unknown ){
+				//geoInfMat.at<float>(t) = geoInfMat.at<float>(t)*pWall / (geoInfMat.at<float>(t)*pWall + (1-geoInfMat.at<float>(t))*(1-pWall) );
+				//flag = false;
+			}
+
+			if(flag){
+				if(geoInfMat.at<float>(t) > 0.6){
+					geoInfMat.at<float>(t) -= 0.1;
+				}
+				else if(geoInfMat.at<float>(t) < 0.4){
+					geoInfMat.at<float>(t) += 0.1;
 				}
 			}
 		}
 	}
 
-	for(int i=0; i<visualInferenceMat.cols; i++){
-		for(int j=0; j<visualInferenceMat.rows; j++){
+	for(int i=0; i<1; i++){
+		medianBlur(visInfMatFree, visInfMatFree, 5);
+		medianBlur(visInfMatWall, visInfMatWall, 3);
+	}
+
+
+	Mat infMat = geoInfMat + visInfMatFree + visInfMatWall - (Mat::ones(costmap.cells.size(), CV_32FC1) * 1.5);
+
+	resetInference( costmap );
+
+
+	for(int i=0; i<costmap.cells.cols; i++){
+		for(int j=0; j<costmap.cells.rows; j++){
 			Point t(i,j);
 			if( costmap.cells.at<short>(t) != costmap.obsFree && costmap.cells.at<short>(t) != costmap.obsWall){
-				if( visInfMat.at<float>(t) > 0.9){
+				if( infMat.at<float>(t) > 0.25 ){
 					costmap.cells.at<short>(t) = costmap.infWall;
 				}
-				else if( visInfMat.at<float>(t) < 0.2){
+				else if( infMat.at<float>(t) < -0.25){
 					costmap.cells.at<short>(t) = costmap.infFree;
 				}
 			}
@@ -380,15 +473,31 @@ void Inference::displayVisInfMat(Costmap &costmap){
 	for(int i=0; i<costmap.cells.cols; i++){
 		for(int j=0; j<costmap.cells.rows; j++){
 			Point a(i,j);
-			uchar shade;
-			shade = round((1-visInfMat.at<float>(a))*255);
+			uchar shade = round((1-visInfMatFree.at<float>(a))*255);
 			temp.at<uchar>(a) = shade;
 		}
 	}
 
-	namedWindow("Prob Inf Grid", WINDOW_NORMAL);
-	imshow("Prob Inf Grid", temp);
+
+	namedWindow("visInfMatFree", WINDOW_NORMAL);
+	imshow("visInfMatFree", temp);
 	waitKey(1);
+
+
+	temp= Mat::zeros(costmap.cells.size(),CV_8UC1);
+	for(int i=0; i<costmap.cells.cols; i++){
+		for(int j=0; j<costmap.cells.rows; j++){
+			Point a(i,j);
+			uchar shade = round((1-visInfMatWall.at<float>(a))*255);
+			temp.at<uchar>(a) = shade;
+		}
+	}
+
+
+	namedWindow("visInfMatWall", WINDOW_NORMAL);
+	imshow("visInfMatWall", temp);
+	waitKey(1);
+
 }
 
 void Inference::visualInference( Costmap &costmap, Mat &mergeMat){
@@ -406,23 +515,29 @@ void Inference::visualInference( Costmap &costmap, Mat &mergeMat){
 			else if( costmap.cells.at<short>(t) == costmap.obsWall){
 				blankCostmap.at<Vec3b>(t) = costmap.cObsWall;
 			}
+			/*
 			else if( costmap.cells.at<short>(t) == costmap.infWall){
 				blankCostmap.at<Vec3b>(t) = costmap.cInfWall;
 			}
 			else if( costmap.cells.at<short>(t) == costmap.infFree){
 				blankCostmap.at<Vec3b>(t) = costmap.cInfFree;
 			}
+			*/
 			else{
 				blankCostmap.at<Vec3b>(t) = costmap.cUnknown;
 			}
 		}
 	}
-
+	/*
+	namedWindow("costmat", WINDOW_NORMAL);
+	imshow("costmat", blankCostmap);
+	waitKey(1);
+	*/
 	mergeMat = blankCostmap.clone();
-	int nInfIters = 50;
+	float nInfIters = 20;
 	vector<Pose> candidateMatches;
 	vector<Point2f> candidateLocs;
-	for(int infIters = 0; infIters < nInfIters; infIters++){
+	for(float infIters = 0; infIters < nInfIters; infIters++){
 
 		// only select points that are observed free as candidate library pose
 		int ns;
@@ -434,8 +549,7 @@ void Inference::visualInference( Costmap &costmap, Mat &mergeMat){
 		}
 
 		Pose obsPose(graph.nodeLocations[ns], costmap); // make it into a pose
-		if( obsPose.needInference ){ // does it need to be inferred over?
-
+		if( obsPose.needInference){ // does it need to be inferred over
 
 			/*
 			blankCostmap.at<Vec3b>(obsPose.loc) = Vec3b(255,0,0);
@@ -455,9 +569,11 @@ void Inference::visualInference( Costmap &costmap, Mat &mergeMat){
 			int libIndex = getVisualLibraryIndex( obsPose );
 
 			Pose bestLibMatch = visualLibrary[libIndex][0];
-			for(size_t vl=0; vl<visualLibrary[libIndex].size(); vl++){
+			int numLibComparisons = 500;
+			for(int vl=0; vl<numLibComparisons; vl++){
+				int libMember = rand() % visualLibrary[libIndex].size();
 				int orient = 0;
-				matchCost = calcVisualFit( obsPose, visualLibrary[libIndex][vl], costmap, orient, minCost );
+				matchCost = calcVisualFit( obsPose, visualLibrary[libIndex][libMember], costmap, orient, minCost );
 				visualLibrary[libIndex][vl].reward = matchCost;
 				visualLibrary[libIndex][vl].orient = orient;
 
@@ -472,7 +588,7 @@ void Inference::visualInference( Costmap &costmap, Mat &mergeMat){
 
 				if( matchCost < minCost ){
 					minCost = matchCost;
-					bestLibMatch = visualLibrary[libIndex][vl];
+					bestLibMatch = visualLibrary[libIndex][libMember];
 				}
 			}
 
@@ -480,19 +596,24 @@ void Inference::visualInference( Costmap &costmap, Mat &mergeMat){
 				candidateMatches.push_back( bestLibMatch );
 				candidateLocs.push_back( obsPose.loc );
 			}
+			trimCandidatePoses( candidateMatches, candidateLocs );
+
+			for(size_t i=0; i<candidateMatches.size(); i++){
+				candidateMatches[i].rotateLimits();
+				candidateMatches[i].insertPoseInCostmap(costmap, candidateLocs[i], mergeMat);
+				mergeMat.at<Vec3b>(candidateLocs[i]) = Vec3b(0,0,255);
+			}
+
+		}
+		else{
+			infIters -= 1;
 		}
 
-		trimCandidatePoses( candidateMatches, candidateLocs );
-
-		for(size_t i=0; i<candidateMatches.size(); i++){
-			candidateMatches[i].rotateLimits();
-			candidateMatches[i].insertPoseInCostmap(costmap, candidateLocs[i], mergeMat);
-			mergeMat.at<Vec3b>(candidateLocs[i]) = Vec3b(0,0,255);
-		}
-
+		/*
 		namedWindow("mergeMat", WINDOW_NORMAL);
 		imshow("mergeMat", mergeMat);
 		waitKey(1);
+		*/
 	}
 }
 
@@ -553,7 +674,7 @@ float euclidianDistance( Point a, Point b){
 float Inference::calcVisualFit(Pose &po, Pose &pl, Costmap &costmap, int &orient, float minCost){
 
 	// for finding and identifying best match
-	int offSetChecks = 4;
+	int offSetChecks = 1;
 
 	for(size_t offset=0; offset<po.obsLen.size(); offset+=po.nSamples/offSetChecks){ // every length in po as a starting point
 		float cost = 0;
@@ -860,22 +981,33 @@ void Inference::geometricInference(Costmap &costmap, Mat &geoInfMat){
 		costmap.hullBreaches = findHullBreaches(outerHullMat, costmap);
 
 		// my observations are always right
+		geoInfMat = Mat::ones(costmap.cells.size(), CV_16S)*costmap.unknown;
 		for(int i=0; i<costmap.cells.cols; i++){
 			for(int j=0; j<costmap.cells.rows; j++){
 				Point a(i,j);
 				if(costmap.cells.at<short>(a) == costmap.obsFree || costmap.cells.at<short>(a) == costmap.obsWall){
 					if( costmap.cells.at<short>(a) == costmap.obsFree){
 						geoInferenceMat.at<uchar>(a) = costmap.obsFree;
+						geoInfMat.at<short>(a) = costmap.obsFree;
 					}
 					else{
 						geoInferenceMat.at<uchar>(a) = costmap.obsWall;
+						geoInfMat.at<short>(a) = costmap.obsWall;
+					}
+				}
+				else{
+					if(geoInferenceMat.at<uchar>(a) == costmap.infFree){
+						costmap.cells.at<short>(a) = costmap.infFree;
+						geoInfMat.at<short>(a) = costmap.infFree;
+					}
+					else if(geoInferenceMat.at<uchar>(a) ==costmap.infWall){
+						costmap.cells.at<short>(a) = costmap.infWall;
+						geoInfMat.at<short>(a) = costmap.infWall;
 					}
 				}
 			}
 		}
 	}
-
-	geoInfMat = geoInferenceMat.clone();
 
 }
 
@@ -950,6 +1082,48 @@ vector<Point> Inference::findHullBreaches(Mat &outerHullMat, Costmap &costmap){
 	waitKey(1);
 	*/
 	return exits;
+}
+
+void Inference::inflateFree(Costmap &costmap, int inflationSteps){
+
+	int inflatedFree = 10;
+
+	for(int k=0; k<inflationSteps; k++){ // this is number of iterations
+		for(int i=1; i<costmap.cells.cols-1; i++){ // check every cell
+			for(int j=1; j<costmap.cells.rows-1; j++){ // for every cell
+
+				if(costmap.cells.at<short>(j,i) ==  costmap.unknown){ //  inferred free cell
+
+					bool wallFlag = false;
+					if(costmap.cells.at<short>(j+1,i) == costmap.obsFree || costmap.cells.at<short>(j+1,i) == costmap.infFree){
+						wallFlag = true;
+					}
+					else if(costmap.cells.at<short>(j-1,i) == costmap.obsFree || costmap.cells.at<short>(j-1,i) == costmap.infFree){
+						wallFlag = true;
+					}
+					else if(costmap.cells.at<short>(j,i+1) == costmap.obsFree || costmap.cells.at<short>(j,i+1) == costmap.infFree){
+						wallFlag = true;
+					}
+					else if(costmap.cells.at<short>(j,i-1) == costmap.obsFree || costmap.cells.at<short>(j,i-i) == costmap.infFree){
+						wallFlag = true;
+					}
+
+					if( wallFlag){
+						costmap.cells.at<short>(j,i) = inflatedFree;
+					}
+				}
+			}
+		}
+		for(int i=1; i<costmap.cells.cols-1; i++){ // check every cell
+			for(int j=1; j<costmap.cells.rows-1; j++){ // for every cell
+				Point a(i,j);
+				if(costmap.cells.at<short>(a) == inflatedFree){
+					costmap.cells.at<short>(a) = costmap.infFree;
+				}
+			}
+		}
+	}
+
 }
 
 void Inference::inflateWalls(Costmap &costmap, int inflationSteps){
@@ -1732,9 +1906,6 @@ void Inference::getMatWithValue(Costmap &costmap, Mat &mat, int value){
 
 void Inference::getOuterHull(Costmap &costmap, Mat &outerHullDrawing, vector<Point> &outerHull){
 
-	// initialize the final mat
-	geoInferenceMat = Mat::ones(costmap.cells.size(), CV_8UC1)*costmap.unknown; // set all cells as unknown
-
 	vector<Point> obsPoints;
 	for(int i=0; i<costmap.cells.cols; i++){
 		for(int j=0; j<costmap.cells.rows; j++){
@@ -1852,6 +2023,8 @@ void Inference::getOuterHull(Costmap &costmap, Mat &outerHullDrawing, vector<Poi
     }
 
     // add to
+	// initialize the final mat
+	geoInferenceMat = Mat::ones(costmap.cells.size(), CV_8UC1)*costmap.unknown; // set all cells as unknown
     for( size_t i = 0; i< contours.size(); i++ ){
     	drawContours( geoInferenceMat, contours, i, Scalar(costmap.infFree), -1, 8, vector<Vec4i>(), 0, Point() );
     	drawContours( geoInferenceMat, hull, i, Scalar(costmap.infFree), -1, 8, vector<Vec4i>(), 0, Point() );
