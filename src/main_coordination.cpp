@@ -41,7 +41,7 @@ int main(){
 
 	vector<int> treePath;
 	srand( time(NULL) );
-	bool videoFlag = true;
+	bool videoFlag = false;
 
 	int numAgents = 1;
 	int numIterations = 1;
@@ -49,7 +49,7 @@ int main(){
 	int gSpace = 5;
 	float obsThresh = 100;
 	float comThresh = 100;
-	int maxTime = 700;
+	int maxTime = 1000;
 	int reportInterval = 50000;
 	float batteryInit = 500000;
 	bool enableRelaySacrifice = false;
@@ -59,6 +59,7 @@ int main(){
 	//fName.push_back("mineMap2");
 	//fName.push_back("gmapping");
 	//fName.push_back("tunnelTest");
+	//fName.push_back("map5005564");
 
 
 	loadMapNames(fName);
@@ -83,6 +84,7 @@ int main(){
 	for(size_t map_iter = 0; map_iter < 1; map_iter++){
 
 		int mapName = findMapToRun( fName );
+
 		// create world
 		World world(fName[mapName], gSpace, obsThresh, comThresh);
 		if( world.costmap.cells.cols > 300 || world.costmap.cells.rows > 300){
@@ -158,7 +160,7 @@ int main(){
 					waitKey(1);
 					cout << "Main::Here we go!" << endl;
 
-					while(timeSteps < maxTime-1 && percentObserved < 0.99){
+					while(timeSteps < maxTime-1 && percentObserved < 0.97){
 						//cout << "Main::Starting while loop" << endl;
 						timeSteps++;
 
@@ -241,7 +243,7 @@ int main(){
 						}
 
 						// print out progress
-						percentObserved = getPercentObserved(world.costmap, humanObserver.costmap);
+						percentObserved = getPercentObserved(world.costmap, agents[0].costmap);
 
 						timeLog.push_back( timeSteps );
 						precisionInferredAndObservedLog.push_back( getPrecisionInferredAndObserved(agents[0].costmap, world.costmap) );
@@ -255,13 +257,13 @@ int main(){
 							percentObserved += percentDominated;
 						}
 
-						//cout << "------timeSteps & percent observed: " << timeSteps << " & " << percentObserved << " " << map_iter << ": " << fName[map_iter] << endl;
+						cout << "------timeSteps & percent observed: " << timeSteps << " & " << percentObserved << " " << map_iter << ": " << fName[mapName] << endl;
 
 					} // end timeStep in simulation
 
 					cout << "made it to the end of the simulation!" << endl;
 
-					if( percentObserved < 0.98 ){
+					if( percentObserved < 0.97 ){
 						return -1;
 					}
 
