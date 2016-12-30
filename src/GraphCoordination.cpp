@@ -88,22 +88,33 @@ void GraphCoordination::marketPoses( Costmap &costmap, Point cLoc, Point &gLoc, 
 			bool flag = false;
 			//cerr << "GraphCoordination::marketPoses::A2" << endl;
 			if( market.gLocs[i].x > 0 && market.gLocs[i].y > 0){
-				//cerr << "GraphCoordination::marketPoses::A3" << endl;
-				if(sqrt(pow(cLoc.x - market.gLocs[i].x,2) + pow(cLoc.y - market.gLocs[i].y,2)) <=  market.exploreCosts[i]){
-					//cerr << "GraphCoordination::marketPoses::A4" << endl;
-					if(costmap.aStarDist(market.gLocs[i], cLoc) - market.exploreCosts[i] > 0.1){
-						//cerr << "out of aStarDist: true" << endl;
-						flag = true; // I am not a* closer
+
+				float tol = 1.41;
+				float euclidCost = sqrt(pow(cLoc.x - market.gLocs[i].x,2) + pow(cLoc.y - market.gLocs[i].y,2));
+				if( euclidCost < market.exploreCosts[i] + tol){ // am I within euclidian tolerance
+					// Yes, check A* dist
+					float aStarCost = costmap.aStarDist(market.gLocs[i], cLoc);
+					if( aStarCost < market.exploreCosts[i] - tol ){
+						continue; // I am closer by more than tol, it can be mine for sure
 					}
-					else if(abs(costmap.aStarDist(market.gLocs[i], cLoc) - market.exploreCosts[i]) < 0.1 && market.myIndex < i){
-						flag = true;
+					else{ // it might be mine
+						if( aStarCost - tol < market.exploreCosts[i] ){ // is it within tolerance?
+							// yes, within tolerance, do they outrank me?
+							if( market.myIndex < int(i) ){ // yes, they do
+								flag = true; // it's theirs
+							}
+							else{ // no the don't
+								continue; // it can be mine
+							}
+						}
+						else{ // not within tolerance, definitely not mine
+							flag = true;
+						}
 					}
-				}
-				else{ // I am not euclidian closer
-					//cerr << "GraphCoordination::marketPoses::A5" << endl;
+				} // not euclid closer, definitely not mine
+				else{
 					flag = true;
 				}
-				//cerr << "GraphCoordination::marketPoses::A6" << endl;
 			}
 			//cerr << "GraphCoordination::marketPoses::A7" << endl;
 			if(flag){ // they are closer, remove all reward from their goals

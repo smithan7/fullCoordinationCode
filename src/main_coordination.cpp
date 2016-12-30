@@ -43,7 +43,7 @@ int main(){
 	srand( time(NULL) );
 	bool videoFlag = false;
 
-	int numAgents = 1;
+	int numAgents = 4;
 	int numIterations = 1;
 
 	int gSpace = 5;
@@ -57,34 +57,36 @@ int main(){
 	vector<string> fName;
 	//fName.push_back("mineMap");
 	//fName.push_back("mineMap2");
-	//fName.push_back("gmapping");
+	fName.push_back("gmapping");
 	//fName.push_back("tunnelTest");
 	//fName.push_back("map5005564");
 
 
-	loadMapNames(fName);
+	//loadMapNames(fName);
 
 	vector<string> exploreMethod;
 	//exploreMethod.push_back("pose");
 	//exploreMethod.push_back("select");
-	//exploreMethod.push_back("selectPose");
+	exploreMethod.push_back("selectPose");
 	//exploreMethod.push_back("greedyFrontiers");
 	exploreMethod.push_back("marketFrontiers");
 
 	vector<string> inferenceMethod;
 	//inferenceMethod.push_back("naive");
-	//inferenceMethod.push_back("geometric");
+	inferenceMethod.push_back("geometric");
 	//inferenceMethod.push_back("structural");
 	//inferenceMethod.push_back("global");
-	inferenceMethod.push_back("visual");
+	//inferenceMethod.push_back("visual");
 
 	srand( time(NULL) );
 
 
 	for(size_t map_iter = 0; map_iter < 1; map_iter++){
 
-		int mapName = findMapToRun( fName );
-
+		int mapName = 0;
+		if(fName.size() > 1){
+			mapName = findMapToRun( fName );
+		}
 		// create world
 		World world(fName[mapName], gSpace, obsThresh, comThresh);
 		if( world.costmap.cells.cols > 300 || world.costmap.cells.rows > 300){
@@ -183,7 +185,7 @@ int main(){
 							globalObserver.market.dissasembleTransmission( marketTransmission );
 
 							// all agents communicate with humanObserver, if possible
-							if( world.commoCheck(agents[i].cLoc, humanObserver.cLoc, comThresh) ){
+							if( world.commoCheck(agents[i].cLoc, humanObserver.cLoc, comThresh) || true){
 								humanObserver.market.dissasembleTransmission( marketTransmission );
 								humanObserver.costmap.subscribeCostmap( costmapTransmission );
 
@@ -196,7 +198,7 @@ int main(){
 							// all agents communicate with each other if possible
 							for(int j=0; j<numAgents; j++){
 								if(i!=j){
-									if(world.commoCheck(agents[i].cLoc, agents[j].cLoc, comThresh)){
+									if(world.commoCheck(agents[i].cLoc, agents[j].cLoc, comThresh) || true){
 										agents[j].market.dissasembleTransmission( marketTransmission );
 										agents[j].costmap.subscribeCostmap( costmapTransmission );
 									}
@@ -268,7 +270,7 @@ int main(){
 					}
 
 					ofstream myfile;
-					myfile.open ("/home/andy/git/coordination/Results/Visual_inf_27_dec_2016.csv", ofstream::out | ofstream::app);
+					myfile.open ("/home/andy/git/coordination/Results/Coordination_30_dec_2016.csv", ofstream::out | ofstream::app);
 					for(size_t i=0; i<timeLog.size(); i++){
 						myfile << fName[mapName] << ",";
 						myfile << inferenceMethod[inferenceMethod_iter] << ",";
