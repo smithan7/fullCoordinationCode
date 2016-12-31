@@ -263,7 +263,7 @@ void Agent::marketReturnInfo(){
 	bool flag = false;
 
 	if( market.reportRequests[market.myIndex] == 1){
-		cout << "got a market request" << endl;
+		//cout << "got a market request" << endl;
 		market.reportRequests[market.myIndex] = 0;
 		market.reportTimes[market.myIndex] = reportInterval;
 		reportCntr = 0;
@@ -273,7 +273,7 @@ void Agent::marketReturnInfo(){
 
 	for( int a = 0; a<market.nAgents; a++){
 		if( market.comCheck(a) ){ // am I in contact with them currently?
-			cout << "in coms" << endl;
+			//cout << "in coms" << endl;
 			//cin.ignore();
 			if( market.reportCosts[myIndex] < market.reportCosts[a]+1 ){ // am I closer to observer?
 				//cout << "myCost is less, I'll report" << endl;
@@ -456,10 +456,10 @@ void Agent::act(){
 	cout << "Agent[" << myIndex << "]::act::cLoc / gLoc / reportCntr / batteryLeft / returnTime: " << cLoc << " / " << gLoc << " / " << reportCntr << " / " << batteryLeft << " / " << returnTime << endl;
 	cout << "Agent[" << myIndex << "]::act::reportFlag / returnFlag: " << reportFlag << " / " << returnFlag << endl;
 	cout << "Agent[" << myIndex << "]::act::relayFlag / sacrificeFlag: " << relayFlag << " / " << sacrificeFlag << endl;
-	*/
 	if( relayFlag || sacrificeFlag ){
 		cout << "Agent[" << myIndex << "]::act::rLoc / oLoc: " << rLoc << " / " << oLoc << endl;
 	}
+	*/
 }
 
 void Agent::showCellsPlot(){

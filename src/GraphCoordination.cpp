@@ -89,32 +89,52 @@ void GraphCoordination::marketPoses( Costmap &costmap, Point cLoc, Point &gLoc, 
 			//cerr << "GraphCoordination::marketPoses::A2" << endl;
 			if( market.gLocs[i].x > 0 && market.gLocs[i].y > 0){
 
-				float tol = 1.41;
-				float euclidCost = sqrt(pow(cLoc.x - market.gLocs[i].x,2) + pow(cLoc.y - market.gLocs[i].y,2));
-				if( euclidCost < market.exploreCosts[i] + tol){ // am I within euclidian tolerance
-					// Yes, check A* dist
-					float aStarCost = costmap.aStarDist(market.gLocs[i], cLoc);
-					if( aStarCost < market.exploreCosts[i] - tol ){
-						continue; // I am closer by more than tol, it can be mine for sure
-					}
-					else{ // it might be mine
-						if( aStarCost - tol < market.exploreCosts[i] ){ // is it within tolerance?
-							// yes, within tolerance, do they outrank me?
-							if( market.myIndex < int(i) ){ // yes, they do
-								flag = true; // it's theirs
-							}
-							else{ // no the don't
-								continue; // it can be mine
-							}
+					float tol = 1.41;
+					float euclidCost = sqrt(pow(cLoc.x - market.gLocs[i].x,2) + pow(cLoc.y - market.gLocs[i].y,2));
+					if( euclidCost < market.exploreCosts[i] + tol){ // am I within euclidian tolerance
+						// Yes, check A* dist
+						float aStarCost = costmap.aStarDist(market.gLocs[i], cLoc);
+						if( aStarCost < market.exploreCosts[i] - tol ){
+							continue; // I am closer by more than tol, it can be mine for sure
 						}
-						else{ // not within tolerance, definitely not mine
-							flag = true;
-						}
+						else{ // it might be mine
+							if( aStarCost - tol < market.exploreCosts[i] ){ // is it within tolerance?
+								// yes, within tolerance, do they outrank me?
+								if( market.myIndex < int(i) ){ // yes, they do
+									flag = true; // it's theirs
+								}
+								else{ // no the don't
+									continue; // it can be mine
+								}
+							} // end is it within tolerance
+							else{ // not within tolerance, definitely not mine
+								flag = true;
+							}
+						} // end it might be mine
+					} // not euclid closer, definitely not mine
+					else{
+						flag = true;
 					}
-				} // not euclid closer, definitely not mine
-				else{
+					/*
+
+				//cerr << "GraphCoordination::marketPoses::A3" << endl;
+				if(sqrt(pow(cLoc.x - market.gLocs[i].x,2) + pow(cLoc.y - market.gLocs[i].y,2)) <=  market.exploreCosts[i]){
+					//cerr << "GraphCoordination::marketPoses::A4" << endl;
+					if(costmap.aStarDist(market.gLocs[i], cLoc) - market.exploreCosts[i] > 0.1){
+						//cerr << "out of aStarDist: true" << endl;
+						flag = true; // I am not a* closer
+					}
+					else if(abs(costmap.aStarDist(market.gLocs[i], cLoc) - market.exploreCosts[i]) < 0.1 && market.myIndex < i){
+						flag = true;
+					}
+				}
+				else{ // I am not euclidian closer
+					//cerr << "GraphCoordination::marketPoses::A5" << endl;
 					flag = true;
 				}
+				//cerr << "GraphCoordination::marketPoses::A6" << endl;
+				 *
+				 */
 			}
 			//cerr << "GraphCoordination::marketPoses::A7" << endl;
 			if(flag){ // they are closer, remove all reward from their goals
@@ -125,7 +145,7 @@ void GraphCoordination::marketPoses( Costmap &costmap, Point cLoc, Point &gLoc, 
 					for(int k=0; k<costmap.reward.rows; k++){
 						Point a(j,k);
 						if( nView.at<uchar>(a) == 255){
-							costmap.reward.at<float>(a) = 0;
+							costmap.reward.at<float>(a) *= 0.1;
 						}
 					}
 				}
@@ -193,6 +213,10 @@ void GraphCoordination::marketPoses( Costmap &costmap, Point cLoc, Point &gLoc, 
 			poseDistances[maxPose] = costmap.aStarDist(cLoc, poseGraph.nodeLocations[maxPose]);
 			//cerr << "GraphCoordination::marketPoses::D3" << endl;
 			poseValue[maxPose] = poseRewards[maxPose] - 0.1*pow(poseDistances[maxPose],2);
+
+			if( abs(poseGraph.nodeLocations[maxPose].x - gLoc.x) < 5 && abs(poseGraph.nodeLocations[maxPose].y - gLoc.y < 5) ){
+				poseValue[maxPose] *= 1.1;
+			}
 
 			//cerr << "GraphCoordination::marketPoses::D4:poseValue[maxPose]: " << poseValue[maxPose] << endl;
 			trueDist[maxPose] = true;
@@ -367,7 +391,6 @@ void GraphCoordination::findPosesEvolution(Costmap &costmap){
 
 
 	// add more nodes to pose graph if not fully observing world
-
 	clock_t tStart1 = clock();
 	int iter = 0;
 	while(cReward < gReward && iter < 500){ // add states that increase the observed are until % is observed
@@ -413,7 +436,6 @@ void GraphCoordination::findPosesEvolution(Costmap &costmap){
 			cPoses.erase(cPoses.begin() + iter);
 			oPoses.push_back( dP );
 			cPost--;
-			cerr << "erased dP" << endl;
 		}
 		iter++;
 	}

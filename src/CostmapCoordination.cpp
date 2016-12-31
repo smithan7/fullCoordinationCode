@@ -346,7 +346,7 @@ void CostmapCoordination::clusterFrontiers(vector<Point >  frntList, Costmap &co
 				}
 			}
 		}
-		if(q.size() > 3){
+		if(q.size() > 0){
 			Frontier a(q);
 			this->frontiers.push_back(a);
 		}
