@@ -115,26 +115,6 @@ void GraphCoordination::marketPoses( Costmap &costmap, Point cLoc, Point &gLoc, 
 					else{
 						flag = true;
 					}
-					/*
-
-				//cerr << "GraphCoordination::marketPoses::A3" << endl;
-				if(sqrt(pow(cLoc.x - market.gLocs[i].x,2) + pow(cLoc.y - market.gLocs[i].y,2)) <=  market.exploreCosts[i]){
-					//cerr << "GraphCoordination::marketPoses::A4" << endl;
-					if(costmap.aStarDist(market.gLocs[i], cLoc) - market.exploreCosts[i] > 0.1){
-						//cerr << "out of aStarDist: true" << endl;
-						flag = true; // I am not a* closer
-					}
-					else if(abs(costmap.aStarDist(market.gLocs[i], cLoc) - market.exploreCosts[i]) < 0.1 && market.myIndex < i){
-						flag = true;
-					}
-				}
-				else{ // I am not euclidian closer
-					//cerr << "GraphCoordination::marketPoses::A5" << endl;
-					flag = true;
-				}
-				//cerr << "GraphCoordination::marketPoses::A6" << endl;
-				 *
-				 */
 			}
 			//cerr << "GraphCoordination::marketPoses::A7" << endl;
 			if(flag){ // they are closer, remove all reward from their goals

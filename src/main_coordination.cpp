@@ -44,12 +44,11 @@ int main(){
 	bool videoFlag = false;
 
 	int numAgents = 4;
-	int numIterations = 2;
 
 	int gSpace = 5;
 	float obsThresh = 100;
 	float comThresh = 100;
-	int maxTime = 1000;
+	int maxTime = 150;
 	int reportInterval = 50000;
 	float batteryInit = 500000;
 	bool enableRelaySacrifice = false;
@@ -69,13 +68,13 @@ int main(){
 	exploreMethod.push_back("marketFrontiers");
 	//exploreMethod.push_back("pose");
 	//exploreMethod.push_back("select");
-	//exploreMethod.push_back("selectPose");
+	exploreMethod.push_back("selectPose");
 	exploreMethod.push_back("selectPose");
 
 
 	vector<string> inferenceMethod;
 	inferenceMethod.push_back("naive");
-	//inferenceMethod.push_back("naive");
+	inferenceMethod.push_back("naive");
 	inferenceMethod.push_back("geometric");
 	//inferenceMethod.push_back("structural");
 	//inferenceMethod.push_back("global");
@@ -108,21 +107,19 @@ int main(){
 
 		cout << "main::loaded world" << fName[ mapName ] << endl;
 		vector<Point> sLoc;
-		for(int i=0; i<numIterations*numAgents; i++){
-			while(true){
-				Point tLoc(rand() % world.costmap.cells.cols, rand() % world.costmap.cells.rows);
-				//Point tLoc(26,25);
-				if(world.costmap.cells.at<short>(tLoc) == world.costmap.obsFree){ // its not an obstacle
-					sLoc.push_back(tLoc);
-					break;
-				}
+		while(true){
+			Point tLoc(rand() % world.costmap.cells.cols, rand() % world.costmap.cells.rows);
+			//Point tLoc(26,25);
+			if(world.costmap.cells.at<short>(tLoc) == world.costmap.obsFree){ // its not an obstacle
+				sLoc.push_back(tLoc);
+				break;
 			}
 		}
 		cout << "main::Chose starting locations" << endl;
 
 		//for(size_t exploreMethod_iter = 0; exploreMethod_iter<exploreMethod.size(); exploreMethod_iter++){
 			//for(size_t inferenceMethod_iter = 0; inferenceMethod_iter<inferenceMethod.size(); inferenceMethod_iter++){
-		for(int iterations_iter = 0; iterations_iter<numIterations; iterations_iter++){
+		for(int iterations_iter = 0; iterations_iter<inferenceMethod.size(); iterations_iter++){
 
 			Observer humanObserver(sLoc[0], numAgents, false, "operator", numAgents, enableRelaySacrifice);
 			if( inferenceMethod.back().compare( "visual" ) == 0){
@@ -277,7 +274,7 @@ int main(){
 		} // end test iterations
 
 		ofstream myfile;
-		myfile.open ("/home/andy/git/coordination/Results/Coordination_31_dec_2016_geometric.csv", ofstream::out | ofstream::app);
+		myfile.open ("/home/andy/git/coordination/Results/Coordination_gmapping_full_coms_all_methods.csv", ofstream::out | ofstream::app);
 		for(size_t i=0; i<timeLog.size(); i++){
 			myfile << mapNameLog[i] << ",";
 			myfile << inferenceMethodLog[i] << ",";
