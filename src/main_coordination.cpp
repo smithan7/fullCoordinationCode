@@ -48,6 +48,7 @@ int main(){
 	int gSpace = 5;
 	float obsThresh = 100;
 	float comThresh = 100;
+	bool globalComs = false;
 	int maxTime = 150;
 	int reportInterval = 50000;
 	float batteryInit = 500000;
@@ -93,207 +94,205 @@ int main(){
 	vector<float> recallInferredLog;
 	vector<float> recallObservedLog;
 
-	for(size_t map_iter = 0; map_iter < 1; map_iter++){
 
-		int mapName = 0;
-		if(fName.size() > 1){
-			mapName = findMapToRun( fName );
-		}
-		// create world
-		World world(fName[mapName], gSpace, obsThresh, comThresh);
-		if( world.costmap.cells.cols > 300 || world.costmap.cells.rows > 300){
-			return -1;
-		}
+	int mapName = 0;
+	if(fName.size() > 1){
+		mapName = findMapToRun( fName );
+	}
+	// create world
+	World world(fName[mapName], gSpace, obsThresh, comThresh);
+	if( world.costmap.cells.cols > 300 || world.costmap.cells.rows > 300){
+		return -1;
+	}
 
-		cout << "main::loaded world" << fName[ mapName ] << endl;
-		vector<Point> sLoc;
-		while(true){
-			Point tLoc(rand() % world.costmap.cells.cols, rand() % world.costmap.cells.rows);
-			//Point tLoc(26,25);
-			if(world.costmap.cells.at<short>(tLoc) == world.costmap.obsFree){ // its not an obstacle
-				sLoc.push_back(tLoc);
-				break;
+	cout << "main::loaded world" << fName[ mapName ] << endl;
+	vector<Point> sLoc;
+	while(true){
+		Point tLoc(rand() % world.costmap.cells.cols, rand() % world.costmap.cells.rows);
+		//Point tLoc(26,25);
+		if(world.costmap.cells.at<short>(tLoc) == world.costmap.obsFree){ // its not an obstacle
+			sLoc.push_back(tLoc);
+			break;
+		}
+	}
+	cout << "main::Chose starting locations" << endl;
+
+	//for(size_t exploreMethod_iter = 0; exploreMethod_iter<exploreMethod.size(); exploreMethod_iter++){
+		//for(size_t inferenceMethod_iter = 0; inferenceMethod_iter<inferenceMethod.size(); inferenceMethod_iter++){
+	for(int iterations_iter = 0; iterations_iter<inferenceMethod.size(); iterations_iter++){
+
+		Observer humanObserver(sLoc[0], numAgents, false, "operator", numAgents, enableRelaySacrifice);
+		if( inferenceMethod.back().compare( "visual" ) == 0){
+			cerr << "load vis lib" << endl;
+			humanObserver.inference.loadVisualInferenceLibrary();
+		}
+		Observer globalObserver(sLoc[0], numAgents, true, "global", -1, enableRelaySacrifice);// make this observer get maps shared with it and NOT share its map with people it
+		vector<Agent> agents;
+		for(int i=0; i<numAgents; i++){
+
+			// if the same starting locations
+			agents.push_back(Agent(sLoc[0], i, batteryInit, obsThresh, comThresh, numAgents, reportInterval, enableRelaySacrifice ));
+			cout << "Main::Agent[" << i << "]: created at : " << sLoc[0].x << " , " << sLoc[0].y << endl;
+			// if different starting locations
+			//agents.push_back(Agent(sLoc[iterations_iter*numAgents+i], i, obsThresh, comThresh, numAgents, reportInterval, returnTime));
+			//cout << "Main::Agent[" << i << "]: created at : " << sLoc[iterations_iter*numAgents+i].x << " , " << sLoc[iterations_iter*numAgents+i].y << endl;
+
+			if( inferenceMethod[iterations_iter].compare( "visual" ) == 0){
+				agents.back().inference.loadVisualInferenceLibrary();
+				cerr << "load vis lib" << endl;
 			}
 		}
-		cout << "main::Chose starting locations" << endl;
+		cout << "Main::All agents created" << endl;
 
-		//for(size_t exploreMethod_iter = 0; exploreMethod_iter<exploreMethod.size(); exploreMethod_iter++){
-			//for(size_t inferenceMethod_iter = 0; inferenceMethod_iter<inferenceMethod.size(); inferenceMethod_iter++){
-		for(int iterations_iter = 0; iterations_iter<inferenceMethod.size(); iterations_iter++){
+		time_t start = clock();
 
-			Observer humanObserver(sLoc[0], numAgents, false, "operator", numAgents, enableRelaySacrifice);
-			if( inferenceMethod.back().compare( "visual" ) == 0){
-				//humanObserver.inference.loadVisualInferenceLibrary();
-			}
-			Observer globalObserver(sLoc[0], numAgents, true, "global", -1, enableRelaySacrifice);// make this observer get maps shared with it and NOT share its map with people it
-			vector<Agent> agents;
+		// video writers
+		VideoWriter operatorVideo, globalVideo;
+		if(videoFlag){
+			Size frameSize = world.costmap.cells.size();
+			operatorVideo.open("multiAgentInferenceOperator.avi",CV_FOURCC('M','J','P','G'), 30, frameSize, true );
+			globalVideo.open("multiAgentInferenceGlobal.avi",CV_FOURCC('M','J','P','G'), 30, frameSize, true );
+			cout << "Main::Videos started" << endl;
+		}
+
+		int timeSteps = -1;
+		float percentObserved = 0;
+
+		// initialize observer costmaps
+		world.observe(humanObserver.cLoc, humanObserver.costmap);
+		world.observe(globalObserver.cLoc, globalObserver.costmap);
+
+		globalObserver.showCellsPlot();
+		cout << "Main::Ready, press any key to begin." << endl;
+		waitKey(1);
+		cout << "Main::Here we go!" << endl;
+
+		while(timeSteps < maxTime-1 && percentObserved < 0.97){
+			//cout << "Main::Starting while loop" << endl;
+			timeSteps++;
+
+			// all agents observe
 			for(int i=0; i<numAgents; i++){
-
-				// if the same starting locations
-				agents.push_back(Agent(sLoc[0], i, batteryInit, obsThresh, comThresh, numAgents, reportInterval, enableRelaySacrifice ));
-				cout << "Main::Agent[" << i << "]: created at : " << sLoc[0].x << " , " << sLoc[0].y << endl;
-				// if different starting locations
-				//agents.push_back(Agent(sLoc[iterations_iter*numAgents+i], i, obsThresh, comThresh, numAgents, reportInterval, returnTime));
-				//cout << "Main::Agent[" << i << "]: created at : " << sLoc[iterations_iter*numAgents+i].x << " , " << sLoc[iterations_iter*numAgents+i].y << endl;
-
-				if( inferenceMethod[iterations_iter].compare( "visual" ) == 0){
-					agents.back().inference.loadVisualInferenceLibrary();
-				}
+				world.observe(agents[i].cLoc, agents[i].costmap);
+				agents[i].market.updateMarket(agents[i].cLoc, agents[i].gLoc);
+				world.observe(agents[i].cLoc, globalObserver.costmap);
 			}
-			cout << "Main::All agents created" << endl;
+			humanObserver.market.updateMarket( humanObserver.cLoc, humanObserver.cLoc );
+			globalObserver.market.iterateTime();
+			//cout << "Main::made observations" << endl;
 
-			time_t start = clock();
+			// all agents communicate
+			for(int i=0; i<numAgents; i++){
+				// all agents communicate with global observer, always
+				vector<int> marketTransmission = agents[i].market.assembleTransmission();
+				vector<int> costmapTransmission = agents[i].costmap.publishCostmap();
 
-			// video writers
-			VideoWriter operatorVideo, globalVideo;
-			if(videoFlag){
-				Size frameSize = world.costmap.cells.size();
-				operatorVideo.open("multiAgentInferenceOperator.avi",CV_FOURCC('M','J','P','G'), 30, frameSize, true );
-				globalVideo.open("multiAgentInferenceGlobal.avi",CV_FOURCC('M','J','P','G'), 30, frameSize, true );
-				cout << "Main::Videos started" << endl;
-			}
+				globalObserver.market.dissasembleTransmission( marketTransmission );
 
-			int timeSteps = -1;
-			float percentObserved = 0;
+				// all agents communicate with humanObserver, if possible
+				if( world.commoCheck(agents[i].cLoc, humanObserver.cLoc, comThresh) || globalComs){
+					humanObserver.market.dissasembleTransmission( marketTransmission );
+					humanObserver.costmap.subscribeCostmap( costmapTransmission );
 
-			// initialize observer costmaps
-			world.observe(humanObserver.cLoc, humanObserver.costmap);
-			world.observe(globalObserver.cLoc, globalObserver.costmap);
+					vector<int> obsTran = humanObserver.market.assembleTransmission();
+					agents[i].market.dissasembleTransmission( obsTran );
 
-			globalObserver.showCellsPlot();
-			cout << "Main::Ready, press any key to begin." << endl;
-			waitKey(1);
-			cout << "Main::Here we go!" << endl;
-
-			while(timeSteps < maxTime-1 && percentObserved < 0.97){
-				//cout << "Main::Starting while loop" << endl;
-				timeSteps++;
-
-				// all agents observe
-				for(int i=0; i<numAgents; i++){
-					world.observe(agents[i].cLoc, agents[i].costmap);
-					agents[i].market.updateMarket(agents[i].cLoc, agents[i].gLoc);
-					world.observe(agents[i].cLoc, globalObserver.costmap);
+					vector<int> cmTran = humanObserver.costmap.publishCostmap();
+					agents[i].costmap.subscribeCostmap( cmTran );
 				}
-				humanObserver.market.updateMarket( humanObserver.cLoc, humanObserver.cLoc );
-				globalObserver.market.iterateTime();
-				//cout << "Main::made observations" << endl;
-
-				// all agents communicate
-				for(int i=0; i<numAgents; i++){
-					// all agents communicate with global observer, always
-					vector<int> marketTransmission = agents[i].market.assembleTransmission();
-					vector<int> costmapTransmission = agents[i].costmap.publishCostmap();
-
-					globalObserver.market.dissasembleTransmission( marketTransmission );
-
-					// all agents communicate with humanObserver, if possible
-					if( world.commoCheck(agents[i].cLoc, humanObserver.cLoc, comThresh) || true){
-						humanObserver.market.dissasembleTransmission( marketTransmission );
-						humanObserver.costmap.subscribeCostmap( costmapTransmission );
-
-						vector<int> obsTran = humanObserver.market.assembleTransmission();
-						agents[i].market.dissasembleTransmission( obsTran );
-
-						vector<int> cmTran = humanObserver.costmap.publishCostmap();
-						agents[i].costmap.subscribeCostmap( cmTran );
-					}
-					// all agents communicate with each other if possible
-					for(int j=0; j<numAgents; j++){
-						if(i!=j){
-							if(world.commoCheck(agents[i].cLoc, agents[j].cLoc, comThresh) || true){
-								agents[j].market.dissasembleTransmission( marketTransmission );
-								agents[j].costmap.subscribeCostmap( costmapTransmission );
-							}
+				// all agents communicate with each other if possible
+				for(int j=0; j<numAgents; j++){
+					if(i!=j){
+						if(world.commoCheck(agents[i].cLoc, agents[j].cLoc, comThresh) || globalComs){
+							agents[j].market.dissasembleTransmission( marketTransmission );
+							agents[j].costmap.subscribeCostmap( costmapTransmission );
 						}
 					}
 				}
-				//cout << "Main::Out of communicate with other agents" << endl;
-
-				//cout << "Main::Into inference" << endl;
-				//humanObserver.inference.makeInference( inferenceMethod[0], humanObserver.costmap, world);
-				humanObserver.showCellsPlot();
-				globalObserver.inference.makeInference( "global", globalObserver.costmap, world );
-				globalObserver.showCellsPlot();
-
-				// all agents plan for one timestep
-				for(int i=0; i<numAgents; i++){
-					if( agents[i].inference.visualLibrary.size() == 0){
-						agents[i].inference.buildVisualInferenceLibrary( world );
-					}
-					agents[i].infer( inferenceMethod[iterations_iter], world); // includes updating internal cLoc
-				}
-				//cout << "Main::out of inference" << endl;
-
-				//cout << "Main::Into plan for one timestep" << endl;
-				// all agents plan for one timestep
-				for(int i=0; i<numAgents; i++){
-					agents[i].plan(exploreMethod[iterations_iter] ); // includes updating internal cLoc
-				}
-
-				// all agents act for one timestep
-				for(int i=0; i<numAgents; i++){
-					agents[i].act();
-				}
-
-				if(videoFlag){
-					for(int i =0; i<5; i++){ // slower frmae rate through repeated frames
-						operatorVideo << humanObserver.costmap.displayPlot;
-						globalVideo << globalObserver.costmap.displayPlot;
-					}
-				}
-
-				// print out progress
-				percentObserved = getPercentObserved(world.costmap, agents[0].costmap);
-
-				mapNameLog.push_back( fName[mapName]);
-				inferenceMethodLog.push_back( inferenceMethod[iterations_iter] );
-				exploreMethodLog.push_back( exploreMethod[iterations_iter] );
-				timeLog.push_back( timeSteps );
-				precisionInferredAndObservedLog.push_back( getPrecisionInferredAndObserved(agents[0].costmap, world.costmap) );
-				precisionInferredLog.push_back( getPrecisionInferred(agents[0].costmap, world.costmap) );
-				precisionObservedLog.push_back( getPrecisionObserved(agents[0].costmap, world.costmap) );
-				recallInferredLog.push_back( getRecallInferred(agents[0].costmap, world.costmap) );
-				recallObservedLog.push_back( getRecallObserved(agents[0].costmap, world.costmap) );
-
-				if(exploreMethod[iterations_iter].compare("pose") == 0){
-					float percentDominated = getPercentDominated(world.costmap, agents[0].costmap);
-					percentObserved += percentDominated;
-				}
-
-				cout << "------timeSteps & percent observed: " << timeSteps << " & " << percentObserved << " " << map_iter << ": " << fName[mapName] << endl;
-
-			} // end timeStep in simulation
-
-			cout << "made it to the end of the simulation!" << endl;
-
-			if( percentObserved < 0.97 ){
-				return -1;
 			}
-			//waitKey(0);
-		} // end test iterations
+			//cout << "Main::Out of communicate with other agents" << endl;
 
-		ofstream myfile;
-		myfile.open ("/home/andy/git/coordination/Results/Coordination_gmapping_full_coms_all_methods.csv", ofstream::out | ofstream::app);
-		for(size_t i=0; i<timeLog.size(); i++){
-			myfile << mapNameLog[i] << ",";
-			myfile << inferenceMethodLog[i] << ",";
-			myfile << exploreMethodLog[i] << ",";
-			myfile << timeLog[i] << ",";
+			//cout << "Main::Into inference" << endl;
+			//humanObserver.inference.makeInference( inferenceMethod[0], humanObserver.costmap, world);
+			humanObserver.showCellsPlot();
+			globalObserver.inference.makeInference( "global", globalObserver.costmap, world );
+			globalObserver.showCellsPlot();
 
-			myfile << precisionInferredAndObservedLog[i] << ",";
-			myfile << precisionInferredLog[i] << ",";
-			myfile << precisionObservedLog[i] << ",";
+			// all agents plan for one timestep
+			for(int i=0; i<numAgents; i++){
+				agents[i].infer( inferenceMethod[iterations_iter], world); // includes updating internal cLoc
+			}
+			//cout << "Main::out of inference" << endl;
 
-			myfile << recallInferredLog[i] << ",";
-			myfile << recallObservedLog[i] << "\n";
+			//cout << "Main::Into plan for one timestep" << endl;
+			// all agents plan for one timestep
+			for(int i=0; i<numAgents; i++){
+				agents[i].plan(exploreMethod[iterations_iter] ); // includes updating internal cLoc
+			}
+
+			// all agents act for one timestep
+			for(int i=0; i<numAgents; i++){
+				agents[i].act();
+			}
+
+			if(videoFlag){
+				for(int i =0; i<5; i++){ // slower frmae rate through repeated frames
+					operatorVideo << humanObserver.costmap.displayPlot;
+					globalVideo << globalObserver.costmap.displayPlot;
+				}
+			}
+
+			// print out progress
+			percentObserved = getPercentObserved(world.costmap, globalObserver.costmap);
+
+			mapNameLog.push_back( fName[mapName]);
+			inferenceMethodLog.push_back( inferenceMethod[iterations_iter] );
+			exploreMethodLog.push_back( exploreMethod[iterations_iter] );
+			timeLog.push_back( timeSteps );
+			precisionInferredAndObservedLog.push_back( getPrecisionInferredAndObserved(agents[0].costmap, world.costmap) );
+			precisionInferredLog.push_back( getPrecisionInferred(agents[0].costmap, world.costmap) );
+			precisionObservedLog.push_back( getPrecisionObserved(agents[0].costmap, world.costmap) );
+			recallInferredLog.push_back( getRecallInferred(agents[0].costmap, world.costmap) );
+			recallObservedLog.push_back( getRecallObserved(agents[0].costmap, world.costmap) );
+
+			if(exploreMethod[iterations_iter].compare("pose") == 0){
+				float percentDominated = getPercentDominated(world.costmap, agents[0].costmap);
+				percentObserved += percentDominated;
+			}
+
+			cout << "------timeSteps & percent observed: " << timeSteps << " & " << percentObserved << " & " << fName[mapName] << endl;
+
+		} // end timeStep in simulation
+
+		cout << "made it to the end of the simulation!" << endl;
+
+		if( percentObserved < 0.97 ){
+			return -1;
 		}
-		myfile.close();
+		//waitKey(0);
+	} // end test iterations
 
-		cerr << "wrote the file!" << endl;
-			//} // end inference iterations
-		//} // end explore methods
-	} // end maps
+	ofstream myfile;
+	myfile.open ("/home/andy/git/coordination/Results/Coordination_gmapping_los_coms_100_all_methods.csv", ofstream::out | ofstream::app);
+	for(size_t i=0; i<timeLog.size(); i++){
+		myfile << mapNameLog[i] << ",";
+		myfile << inferenceMethodLog[i] << ",";
+		myfile << exploreMethodLog[i] << ",";
+		myfile << timeLog[i] << ",";
+
+		myfile << precisionInferredAndObservedLog[i] << ",";
+		myfile << precisionInferredLog[i] << ",";
+		myfile << precisionObservedLog[i] << ",";
+
+		myfile << recallInferredLog[i] << ",";
+		myfile << recallObservedLog[i] << "\n";
+	}
+	myfile.close();
+
+	cerr << "wrote the file!" << endl;
+	return 1;
+		//} // end inference iterations
+	//} // end explore methods
 }// end main
 
 float getPercentObserved(Costmap &globalCostmap, Costmap &workingCostmap){
