@@ -1,0 +1,18 @@
+
+
+coordination_gmapping_full_coms_all_methods.csv
+	holds global communication, enabled with true statement on coms check with 4 agents checked on gmapping map with random start locations using frontier market, naive pose, and visual pose
+
+coordination_gmapping_los_coms_all_methods.csv
+	los restricted coms with unlimited range and 4 agents using frontier market, naive pose, and inference pose
+
+coordination_gmapping_los_coms_##_all_methods.csv
+	los restricted coms with range of ## units with 4 agents using frontier market, naive pose, and inference pose
+	
+Coordination_gmapping_num_agents_%d_all_methods.csv
+	global_coms_with ## number of agents on gmapping with frontier market, naive pose, and inference pose
+	
+	
+Coordination_mineMap_num_agents_%d_all_methods.csv
+	global_coms_with ## number of agents on mineMap with frontier market, naive pose, and inference pose
+	
