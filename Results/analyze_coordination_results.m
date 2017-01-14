@@ -11,7 +11,6 @@ fName2 = '_all_methods.csv';
 
 for iters = 1:length(com_ranges)
     
-    
     filename = strcat(fName1, num2str(com_ranges(iters)), fName2);
     delimiterIn = ',';
     A = importdata(filename,delimiterIn);
@@ -46,5 +45,19 @@ for iters = 1:length(com_ranges)
             end
         end 
     end
-        
+    
+    times.mean_mf(iters) = mean( times.marketFrontier );
+    times.mean_np(iters) = mean( times.naivePose );
+    times.mean_ip(iters) = mean( times.inferredPose );
+    
+    times.var_mf(iters) = std( times.marketFrontier );
+    times.var_np(iters) = std( times.naivePose );
+    times.var_ip(iters) = std( times.inferredPose );
 end
+
+figure
+hold all
+plot(com_ranges, times.mean_mf, 'r')
+plot(com_ranges, times.mean_np, 'g')
+plot(com_ranges, times.mean_ip, 'b')
+
