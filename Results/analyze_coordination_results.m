@@ -25,6 +25,7 @@ for iters = 1:length(com_ranges)
             segment{int_cntr}.inference = A.textdata(i-1,2);
             segment{int_cntr}.coordination = A.textdata(i-1,3);
             int_cntr = int_cntr+1;
+            begin = i;
         end
     end
 
@@ -50,14 +51,21 @@ for iters = 1:length(com_ranges)
     times.mean_np(iters) = mean( times.naivePose );
     times.mean_ip(iters) = mean( times.inferredPose );
     
-    times.var_mf(iters) = std( times.marketFrontier );
-    times.var_np(iters) = std( times.naivePose );
-    times.var_ip(iters) = std( times.inferredPose );
+    times.var_mf(iters) = std( times.marketFrontier )/sqrt(length(times.marketFrontier));
+    times.var_np(iters) = std( times.naivePose )/sqrt(length(times.marketFrontier));
+    times.var_ip(iters) = std( times.inferredPose )/sqrt(length(times.marketFrontier));
 end
 
 figure
 hold all
-plot(com_ranges, times.mean_mf, 'r')
-plot(com_ranges, times.mean_np, 'g')
-plot(com_ranges, times.mean_ip, 'b')
+plot(com_ranges, times.mean_mf, 'r', 'linewidth',2)
+plot(com_ranges, times.mean_np, 'g', 'linewidth',2)
+plot(com_ranges, times.mean_ip, 'b', 'linewidth',2)
 
+xlabel('Communication Range')
+ylabel('Exploration Length')
+legend('Frontier','Naive Pose', 'Inferred Pose')
+
+errorbar(com_ranges, times.mean_mf, times.var_mf, 'k.', 'linewidth',2)
+errorbar(com_ranges, times.mean_np, times.var_np, 'k.', 'linewidth',2)
+errorbar(com_ranges, times.mean_ip, times.var_ip, 'k.', 'linewidth',2)
